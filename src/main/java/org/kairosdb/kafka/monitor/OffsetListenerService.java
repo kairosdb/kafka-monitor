@@ -6,10 +6,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.kairosdb.core.KairosDBService;
 import org.kairosdb.core.exception.KairosDBException;
 import org.kairosdb.eventbus.FilterEventBus;
@@ -48,51 +50,55 @@ public class OffsetListenerService implements KairosDBService
 		streamConfig.put("exclude.internal.topics", "false");
 
 		KStreamBuilder builder = new KStreamBuilder();
-		builder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets").foreach(new ForeachAction<Bytes, Bytes>()
-		{
-			@Override
-			public void apply(Bytes key, Bytes value)
-			{
-				ByteBuffer bb = ByteBuffer.wrap(key.get());
-				int version = bb.getShort();
-				int strSize = bb.getShort();
-				byte[] groupName = new byte[strSize];
-				bb.get(groupName);
-				int partition = -1;
-				byte[] topicName = "NULL".getBytes();
-				if (bb.position() != bb.limit())
+		builder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
+				.map(new KeyValueMapper<Bytes, Bytes, KeyValue<OffsetKey, OffsetValue>>()
 				{
-					strSize = bb.getShort();
-					topicName = new byte[strSize];
-					bb.get(topicName);
-					partition = bb.getInt();
-				}
-				System.out.println("Key: "+version+" "+new String(groupName)+" "+new String(topicName)+" "+partition);
-
-				bb = ByteBuffer.wrap(value.get());
-				version = bb.getShort();
-				if (version == 0)
-				{
-					System.out.println("Value: "+value.get().length+" "+value);
-				}
-				else
-				{
-					long offset = bb.getLong();
-					strSize = bb.getShort();
-					String metadata = "NO_METADATA";
-					if (strSize != 0)
+					@Override
+					public KeyValue<OffsetKey, OffsetValue> apply(Bytes key, Bytes value)
 					{
-						byte[] metadataBytes = new byte[strSize];
-						bb.get(metadataBytes);
-						metadata = new String(metadataBytes);
-					}
-					long commitTimestamp = bb.getLong();
-					long expireTimestamp = bb.getLong();
-					System.out.println("Value: " + version + " " + offset + " " + new Date(commitTimestamp) + " " + new Date(expireTimestamp));
-				}
+						ByteBuffer bb = ByteBuffer.wrap(key.get());
+						int version = bb.getShort();
+						int strSize = bb.getShort();
+						byte[] groupName = new byte[strSize];
+						bb.get(groupName);
+						int partition = -1;
+						byte[] topicName = "NULL".getBytes();
+						if (bb.position() != bb.limit())
+						{
+							strSize = bb.getShort();
+							topicName = new byte[strSize];
+							bb.get(topicName);
+							partition = bb.getInt();
+						}
 
-			}
-		});
+						OffsetKey offsetKey = new OffsetKey(new String(groupName), new String(topicName), partition);
+
+
+						bb = ByteBuffer.wrap(value.get());
+						version = bb.getShort();
+
+						long offset = bb.getLong();
+						strSize = bb.getShort();
+						String metadata = "NO_METADATA";
+						if (strSize != 0)
+						{
+							byte[] metadataBytes = new byte[strSize];
+							bb.get(metadataBytes);
+							metadata = new String(metadataBytes);
+						}
+						long commitTimestamp = bb.getLong();
+
+						long expireTimestamp = -1;
+						if (version == 1)
+							expireTimestamp = bb.getLong();
+
+						OffsetValue offsetValue = new OffsetValue(offset, commitTimestamp, expireTimestamp);
+
+						return new KeyValue<OffsetKey, OffsetValue>(offsetKey, offsetValue);
+					}
+				});
+
+
 
 		//Swap out the context class loader, should be done in kairos before calling plugin
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
