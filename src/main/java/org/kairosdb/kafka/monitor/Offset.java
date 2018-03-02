@@ -219,7 +219,7 @@ public class Offset
 		public Offset deserialize(String topic, byte[] data)
 		{
 			Offset offset = new Offset();
-			
+
 			if (data != null)
 			{
 				ByteBuffer bb = ByteBuffer.wrap(data);
