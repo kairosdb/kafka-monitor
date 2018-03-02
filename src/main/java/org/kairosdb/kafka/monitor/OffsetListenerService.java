@@ -8,10 +8,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.*;
 import org.kairosdb.core.KairosDBService;
 import org.kairosdb.core.exception.KairosDBException;
 import org.kairosdb.eventbus.FilterEventBus;
@@ -51,52 +48,61 @@ public class OffsetListenerService implements KairosDBService
 
 		KStreamBuilder builder = new KStreamBuilder();
 		builder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
-				.map(new KeyValueMapper<Bytes, Bytes, KeyValue<OffsetKey, OffsetValue>>()
+				.filter(new Predicate<Bytes, Bytes>()
 				{
 					@Override
-					public KeyValue<OffsetKey, OffsetValue> apply(Bytes key, Bytes value)
+					public boolean test(Bytes key, Bytes value)
 					{
-						ByteBuffer bb = ByteBuffer.wrap(key.get());
-						int version = bb.getShort();
-						int strSize = bb.getShort();
-						byte[] groupName = new byte[strSize];
-						bb.get(groupName);
-						int partition = -1;
-						byte[] topicName = "NULL".getBytes();
-						if (bb.position() != bb.limit())
+						if (key != null && value != null)
 						{
-							strSize = bb.getShort();
-							topicName = new byte[strSize];
-							bb.get(topicName);
-							partition = bb.getInt();
+							ByteBuffer bbkey = ByteBuffer.wrap(key.get());
+							if (bbkey.getShort() != 1)
+							{
+								System.out.println("Key: "+key.toString());
+								return false;
+							}
+
+							ByteBuffer bbvalue = ByteBuffer.wrap(value.get());
+							if (bbvalue.getShort() != 1)
+							{
+								System.out.println("Value: "+value.toString());
+								return false;
+							}
+
+							return true;
 						}
-
-						OffsetKey offsetKey = new OffsetKey(new String(groupName), new String(topicName), partition);
-
-
-						bb = ByteBuffer.wrap(value.get());
-						version = bb.getShort();
-
-						long offset = bb.getLong();
-						strSize = bb.getShort();
-						String metadata = "NO_METADATA";
-						if (strSize != 0)
-						{
-							byte[] metadataBytes = new byte[strSize];
-							bb.get(metadataBytes);
-							metadata = new String(metadataBytes);
-						}
-						long commitTimestamp = bb.getLong();
-
-						long expireTimestamp = -1;
-						if (version == 1)
-							expireTimestamp = bb.getLong();
-
-						OffsetValue offsetValue = new OffsetValue(offset, commitTimestamp, expireTimestamp);
-
-						return new KeyValue<OffsetKey, OffsetValue>(offsetKey, offsetValue);
+						else
+							return false;
 					}
-				});
+				})
+				.map(new KeyValueMapper<Bytes, Bytes, KeyValue<String, Offset>>()
+				{
+					@Override
+					public KeyValue<String, Offset> apply(Bytes key, Bytes value)
+					{
+						Offset offset = Offset.createFromBytes(key.get(), value.get());
+
+						return new KeyValue<String, Offset>(offset.getTopic(), offset);
+					}
+				}).groupByKey(Serdes.String(), new Offset.OffsetSerde())
+				.aggregate(new Initializer<Offset>()
+		           {
+			           @Override
+			           public Offset apply()
+			           {
+				           return new Offset();
+			           }
+		           },
+				new Aggregator<String, Offset, Offset>()
+				{
+					@Override
+					public Offset apply(String key, Offset value, Offset aggregate)
+					{
+						//System.out.println(value);
+						return new Offset();
+					}
+				},
+				new Offset.OffsetSerde(), "stream");
 
 
 
