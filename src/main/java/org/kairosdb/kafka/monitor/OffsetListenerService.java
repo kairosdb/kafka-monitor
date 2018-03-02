@@ -17,7 +17,9 @@ import org.kairosdb.events.DataPointEvent;
 
 import java.nio.ByteBuffer;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -25,6 +27,7 @@ public class OffsetListenerService implements KairosDBService
 {
 	private final Publisher<DataPointEvent> m_publisher;
 	private KafkaStreams m_offsetStream;
+	private Set<String> m_topics = new HashSet<String>();
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus)
@@ -56,14 +59,15 @@ public class OffsetListenerService implements KairosDBService
 						if (key != null && value != null)
 						{
 							ByteBuffer bbkey = ByteBuffer.wrap(key.get());
-							if (bbkey.getShort() != 1)
+							if (bbkey.getShort() > 1)
 							{
 								System.out.println("Key: "+key.toString());
+								System.out.println("Value: "+value.toString());
 								return false;
 							}
 
 							ByteBuffer bbvalue = ByteBuffer.wrap(value.get());
-							if (bbvalue.getShort() != 1)
+							if (bbvalue.getShort() > 1)
 							{
 								System.out.println("Value: "+value.toString());
 								return false;
@@ -99,6 +103,10 @@ public class OffsetListenerService implements KairosDBService
 					public Offset apply(String key, Offset value, Offset aggregate)
 					{
 						//System.out.println(value);
+						m_topics.add(value.getTopic());
+
+						value.
+
 						return new Offset();
 					}
 				},
