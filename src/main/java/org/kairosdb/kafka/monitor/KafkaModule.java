@@ -10,5 +10,6 @@ public class KafkaModule  extends AbstractModule
 	protected void configure()
 	{
 		bind(OffsetListenerService.class).in(Singleton.class);
+		bind(MonitorConfig.class).in(Singleton.class);
 	}
 }
