@@ -11,5 +11,6 @@ public class KafkaModule  extends AbstractModule
 	{
 		bind(OffsetListenerService.class).in(Singleton.class);
 		bind(MonitorConfig.class).in(Singleton.class);
+		bind(UpdateTopicsJob.class).in(Singleton.class);
 	}
 }

@@ -2,8 +2,11 @@ package org.kairosdb.kafka.monitor;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+import org.apache.commons.lang3.time.DateUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -14,6 +17,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
+import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.kairosdb.core.KairosDBService;
 import org.kairosdb.core.datapoints.LongDataPointFactory;
 import org.kairosdb.core.exception.KairosDBException;
@@ -28,15 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -55,11 +51,12 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private final LongDataPointFactory m_dataPointFactory;
 	private KafkaStreams m_offsetStream;
 	private KafkaStreams m_topicOwnerStream;
-	private Set<String> m_topics = new HashSet<String>();
-	private Map<String, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
+	private Set<String> m_topics = new ConcurrentHashSet<>();
+	private Map<Pair<String, String>, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
 	private KafkaConsumer<Bytes, Bytes> m_consumer;
 	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>(); //periodically updated list of topics in kafka
 	private final MonitorConfig m_monitorConfig;
+	private final String m_clientId;
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus,
@@ -69,9 +66,10 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		m_publisher = checkNotNull(eventBus).createPublisher(DataPointEvent.class);
 		m_dataPointFactory = dataPointFactory;
 		m_monitorConfig = monitorConfig;
+		m_clientId = m_monitorConfig.getClientId();
 	}
 
-	//Called by external job to refresh our data
+	//Called by external job to refresh our partition data
 	//todo add external kairosDBJob that calls this every 10 min or so
 	public void updateKafkaTopics()
 	{
@@ -89,10 +87,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	{
 		final Properties defaultConfig = new Properties();
 
-		final String clientId = m_monitorConfig.getClientId();
-
 		defaultConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, m_monitorConfig.getApplicationId());
-		defaultConfig.put(StreamsConfig.CLIENT_ID_CONFIG, clientId);
+		defaultConfig.put(StreamsConfig.CLIENT_ID_CONFIG, m_clientId);
 		defaultConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, m_monitorConfig.getBootStrapServers());
 		defaultConfig.put(StreamsConfig.STATE_DIR_CONFIG, m_monitorConfig.getStreamStateDirectory());
 		defaultConfig.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.streams.processor.WallclockTimestampExtractor");
@@ -102,6 +98,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		defaultConfig.put("exclude.internal.topics", "false");
 
 		Properties offsetProperties = (Properties) defaultConfig.clone();
+		Properties ownerProperties = (Properties) defaultConfig.clone();
 		offsetProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
 		//Swap out the context class loader, should be done in kairos before calling plugin
@@ -110,6 +107,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 		m_consumer = new KafkaConsumer<Bytes, Bytes>(defaultConfig);
 
+		//Stream to listen to offset changes
 		KStreamBuilder offsetStreamBuilder = new KStreamBuilder();
 		offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
 				.filter(new Predicate<Bytes, Bytes>()
@@ -119,6 +117,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					{
 						if (key != null && value != null)
 						{
+							//This code only handles versions 0 and 1 of the offsets
+							//version 2 appears to mean something else
 							ByteBuffer bbkey = ByteBuffer.wrap(key.get());
 							if (bbkey.getShort() > 1)
 							{
@@ -145,6 +145,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					@Override
 					public KeyValue<String, Offset> apply(Bytes key, Bytes value)
 					{
+						//Map the offsets by topic for load balancing
 						Offset offset = Offset.createFromBytes(key.get(), value.get());
 
 						return new KeyValue<String, Offset>(offset.getTopic(), offset);
@@ -155,7 +156,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					           @Override
 					           public String apply()
 					           {
-						           return clientId;
+						           return m_clientId;
 					           }
 				           },
 						new Aggregator<String, Offset, String>()
@@ -163,17 +164,19 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 							@Override
 							public String apply(String key, Offset value, String aggregate)
 							{
-								//System.out.println(value);
+								//Collect the data on our offsets and then notify others
+								//we own this topic
 								m_topics.add(value.getTopic());
 
 								collectData(value);
 
-								return clientId;
+								return m_clientId;
 							}
 						},
 						Serdes.String(), "stream").to(Serdes.String(), Serdes.String(), m_monitorConfig.getTopicOwnerTopicName());
 
 
+		ownerProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, m_monitorConfig.getApplicationId()+"_"+m_clientId); //cannot have the same app id
 		KStreamBuilder topicOwnerBuilder = new KStreamBuilder();
 		topicOwnerBuilder.stream(Serdes.String(), Serdes.String(), m_monitorConfig.getTopicOwnerTopicName())
 				.foreach(new ForeachAction<String, String>()
@@ -181,28 +184,30 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					@Override
 					public void apply(String key, String value)
 					{
-						if (!value.equals(clientId))
-							m_topics.remove(key);
+						//System.out.println(value + " owns topic "+ key);
+						if (!value.equals(m_clientId))
+							m_topics.remove(key); //We do not own the topic anymore
 					}
 				});
 
 		m_offsetStream = new KafkaStreams(offsetStreamBuilder, offsetProperties);
 		m_offsetStream.start();
 
-		m_topicOwnerStream = new KafkaStreams(topicOwnerBuilder, defaultConfig);
+		m_topicOwnerStream = new KafkaStreams(topicOwnerBuilder, ownerProperties);
 		m_topicOwnerStream.start();
 
 		//put it back
 		Thread.currentThread().setContextClassLoader(contextClassLoader);
-
-
-
 	}
 
 
+	/**
+	 Collects and maintains a map of consumer offsets
+	 @param value
+	 */
 	private void collectData(Offset value)
 	{
-		String groupKey = value.getTopic()+value.getGroup();
+		Pair<String, String> groupKey = Pair.of(value.getTopic(), value.getGroup());
 		GroupStats groupStats = m_groupStatsMap.get(groupKey);
 
 		if (groupStats == null)
@@ -217,8 +222,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	@Override
 	public void stop()
 	{
-		m_offsetStream.close();
-		m_topicOwnerStream.close();
+		m_offsetStream.close(30, TimeUnit.SECONDS);
+		m_topicOwnerStream.close(30, TimeUnit.SECONDS);
 	}
 
 	@Override
@@ -247,6 +252,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			return ret;
 
 		ret = new HashMap<>();
+		m_currentTopicOffsets.put(topic, ret);
 
 		List<PartitionInfo> partitionInfos = m_kafkaTopics.get(topic);
 
@@ -268,7 +274,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		}
 
 		//todo change to debug statement
-		System.out.println("Get latest topic offsets: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
+		//System.out.println("Get latest topic offsets: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 
 		return ret;
 	}
@@ -288,13 +294,29 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	{
 		try
 		{
-			long now = System.currentTimeMillis();
-			Collection<GroupStats> values = m_groupStatsMap.values();
-			for (GroupStats groupStats : values)
+			Stopwatch timer = Stopwatch.createStarted();
+
+			//time to report metrics - round to nearest minute so in the edge case of multiple monitors
+			//reporting the same metric they will just overwrite each other.
+			long now = DateUtils.round(new Date(), Calendar.MINUTE).getTime();
+
+			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = m_groupStatsMap.entrySet();
+			for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : entrySet)
 			{
+				if (!m_topics.contains(groupStatsEntry.getValue().getTopic()))
+				{
+					entrySet.remove(groupStatsEntry);
+					continue; //We don't own this topic anymore
+				}
+
+				GroupStats groupStats = groupStatsEntry.getValue();
+
 				Map<Integer, Long> latestOffsets = getLatestTopicOffsets(groupStats.getTopic());
 
-				ImmutableSortedMap<String, String> groupTags = ImmutableSortedMap.of("group", groupStats.getGroupName(), "topic", groupStats.getTopic());
+				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+						.putAll(m_monitorConfig.getAdditionalTags())
+						.put("group", groupStats.getGroupName())
+						.put("topic", groupStats.getTopic()).build();
 
 				//todo make it optional if we report our own offsets
 				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
@@ -307,9 +329,13 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				for (OffsetStat offsetStat : groupStats.getOffsetStats())
 				{
 					//todo document that offset age may be lost when adding new nodes to the monitor group
-					ImmutableSortedMap<String, String> partitionTags = ImmutableSortedMap.of("group", groupStats.getGroupName(),
-							"topic", groupStats.getTopic(),
-							"partition", String.valueOf(offsetStat.getPartition()));
+
+					ImmutableSortedMap<String, String> partitionTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+							.putAll(m_monitorConfig.getAdditionalTags())
+							.put("group", groupStats.getGroupName())
+							.put("topic", groupStats.getTopic())
+							.put("partition", String.valueOf(offsetStat.getPartition())).build();
+
 					DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
 							partitionTags,
 							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getTimestamp())));
@@ -333,14 +359,48 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						m_dataPointFactory.createDataPoint(now, groupLag));
 				m_publisher.post(groupLagEvent);
 
-				//todo report diff latestOffsets with previous gathered - ie producer rate
-
 				//todo set last offsets with current - put this in external object.
 			}
 
+			//iterate through our topics and report producer rate
+			for (String topic : m_topics)
+			{
+				Map<Integer, Long> lastOffsets = m_lastTopicOffsets.get(topic);
+				Map<Integer, Long> currentOffsets = m_currentTopicOffsets.get(topic);
+				if (lastOffsets == null || currentOffsets == null)
+					continue;  //no offsets, topic may be coming or going
 
-			//reset
-			m_currentTopicOffsets.clear();
+				long offsetCount = 0L;
+				for (Integer partition : currentOffsets.keySet())
+				{
+					offsetCount += calculateLag(lastOffsets.get(partition),
+							currentOffsets.get(partition));
+				}
+
+				ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+						.putAll(m_monitorConfig.getAdditionalTags())
+						.put("topic", topic).build();
+
+				DataPointEvent producerRateEvent = new DataPointEvent(m_monitorConfig.getProducerRateMetric(),
+						producerTags,
+						m_dataPointFactory.createDataPoint(now, offsetCount));
+				m_publisher.post(producerRateEvent);
+			}
+
+
+			//reset current offsets
+			m_lastTopicOffsets = m_currentTopicOffsets;
+			m_currentTopicOffsets = new HashMap<>();
+
+			//Report how long it took to gather/report offsets
+			ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+					.putAll(m_monitorConfig.getAdditionalTags())
+					.put("host", m_clientId).build();
+
+			DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTime(),
+					offsetTags,
+					m_dataPointFactory.createDataPoint(now, timer.stop().elapsed(TimeUnit.MILLISECONDS)));
+			m_publisher.post(offsetTimeEvent);
 
 		}
 		catch (Exception e)
