@@ -60,6 +60,10 @@ public class MonitorConfig
 	@Named("kairosdb.kafka_monitor.metric.offset_gather_time_ms")
 	private String m_offsetGatherTime = "offset_gather_time";
 
+	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.metric.gather_failure")
+	private String m_gatherFailureMetric = "gather_failure";
+
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
 
 	@Inject(optional = true)
@@ -133,6 +137,11 @@ public class MonitorConfig
 	public String getOffsetGatherTime()
 	{
 		return m_metricPrefix + m_offsetGatherTime;
+	}
+
+	public String getGatherFailureMetric()
+	{
+		return m_gatherFailureMetric;
 	}
 
 	public Map<String, String> getAdditionalTags()

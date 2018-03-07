@@ -101,7 +101,6 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		Properties ownerProperties = (Properties) defaultConfig.clone();
 		offsetProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-		//Swap out the context class loader, should be done in kairos before calling plugin
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 		Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
 
@@ -292,13 +291,13 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	@Override
 	public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException
 	{
+		//time to report metrics - round to nearest minute so in the edge case of multiple monitors
+		//reporting the same metric they will just overwrite each other.
+		long now = DateUtils.round(new Date(), Calendar.MINUTE).getTime();
+
 		try
 		{
 			Stopwatch timer = Stopwatch.createStarted();
-
-			//time to report metrics - round to nearest minute so in the edge case of multiple monitors
-			//reporting the same metric they will just overwrite each other.
-			long now = DateUtils.round(new Date(), Calendar.MINUTE).getTime();
 
 			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = m_groupStatsMap.entrySet();
 			for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : entrySet)
@@ -406,6 +405,27 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		catch (Exception e)
 		{
 			logger.error("Error processing kafka stats", e);
+
+			//Report failure metric
+			ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+					.putAll(m_monitorConfig.getAdditionalTags())
+					.put("host", m_clientId).build();
+
+			DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
+					offsetTags,
+					m_dataPointFactory.createDataPoint(now, 1));
+			m_publisher.post(failureEvent);
+
+			//Restart the client
+			stop();
+			try
+			{
+				start();
+			}
+			catch (KairosDBException e1)
+			{
+				logger.error("Failed to start monitor service", e1);
+			}
 		}
 	}
 }
