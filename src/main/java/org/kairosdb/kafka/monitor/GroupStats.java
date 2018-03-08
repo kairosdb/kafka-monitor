@@ -22,6 +22,14 @@ public class GroupStats
 		m_partitionStats = new ConcurrentHashMap<>();
 	}
 
+	public GroupStats copy()
+	{
+		GroupStats copy = new GroupStats(m_groupName, m_topic);
+		copy.m_consumeCount.getAndSet(m_consumeCount.get());
+
+		return copy;
+	}
+
 	public String getGroupName()
 	{
 		return m_groupName;

@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.kairosdb.kafka.monitor.OffsetStat.calculateDiff;
 import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
 import static org.quartz.TriggerBuilder.newTrigger;
 
@@ -278,15 +279,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		return ret;
 	}
 
-	private long calculateLag(long consumerOffset, long head)
-	{
-		if (consumerOffset > head)
-		{
-			return (Long.MAX_VALUE - consumerOffset) + head;
-		}
-		else
-			return head - consumerOffset;
-	}
+
 
 	@Override
 	public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException
@@ -298,6 +291,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		try
 		{
 			Stopwatch timer = Stopwatch.createStarted();
+
+			//todo grab a copy of all consumer offsets before processing
+			//we are getting consumers that are ahead of the head by the time we report
 
 			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = m_groupStatsMap.entrySet();
 			for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : entrySet)
@@ -343,7 +339,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					Long latestOffset = latestOffsets.get(offsetStat.getPartition());
 					if (latestOffset != null) //in case something goes bananas
 					{
-						long partitionLag = calculateLag(offsetStat.getOffset(), latestOffset);
+						long partitionLag = calculateDiff(latestOffset, offsetStat.getOffset());
 						groupLag += partitionLag;
 
 						DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
@@ -372,8 +368,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				long offsetCount = 0L;
 				for (Integer partition : currentOffsets.keySet())
 				{
-					offsetCount += calculateLag(lastOffsets.get(partition),
-							currentOffsets.get(partition));
+					offsetCount += calculateDiff(
+							currentOffsets.get(partition),
+							lastOffsets.get(partition));
 				}
 
 				ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
