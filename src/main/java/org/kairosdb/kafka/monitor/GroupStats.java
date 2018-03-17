@@ -2,30 +2,51 @@ package org.kairosdb.kafka.monitor;
 
 import com.google.common.collect.ImmutableList;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class GroupStats
 {
 	private final String m_groupName;
 	private final String m_topic;
-	private final AtomicLong m_consumeCount = new AtomicLong();
+	private long m_consumeCount;
 	private final Map<Integer, OffsetStat> m_partitionStats;
+	private final Object m_offsetLock = new Object();
+	private final ProcessRate m_processRate;
+
 
 	public GroupStats(String groupName, String topic)
+	{
+		this(groupName, topic, new ProcessRate(10));
+	}
+
+	private GroupStats(String groupName, String topic, ProcessRate processRate)
 	{
 		m_groupName = groupName;
 		m_topic = topic;
 		m_partitionStats = new ConcurrentHashMap<>();
+		m_processRate = processRate;
 	}
 
-	public GroupStats copy()
+	/**
+	 Creates a deep copy of this GroupStats object and resets the consume count
+	 @return
+	 */
+	public GroupStats copyAndReset()
 	{
-		GroupStats copy = new GroupStats(m_groupName, m_topic);
-		copy.m_consumeCount.getAndSet(m_consumeCount.get());
+		GroupStats copy = new GroupStats(m_groupName, m_topic, m_processRate);
+
+		synchronized (m_offsetLock)
+		{
+			copy.m_consumeCount = m_consumeCount;
+			m_consumeCount = 0L;
+
+			for (Map.Entry<Integer, OffsetStat> offset : m_partitionStats.entrySet())
+			{
+				copy.m_partitionStats.put(offset.getKey(), offset.getValue().copy());
+			}
+		}
 
 		return copy;
 	}
@@ -40,23 +61,47 @@ public class GroupStats
 		return m_topic;
 	}
 
+	/**
+	 Returns the average rate in milliseconds
+	 @return
+	 */
+	public double getCurrentRate()
+	{
+		return m_processRate.getCurrentRate();
+	}
+
 	public void offsetChange(int partition, long offset, long timestamp)
 	{
-		OffsetStat offsetStat = m_partitionStats.get(partition);
+		synchronized (m_offsetLock)
+		{
+			OffsetStat offsetStat = m_partitionStats.get(partition);
 
-		if (offsetStat == null)
-		{
-			m_partitionStats.put(partition, new OffsetStat(offset, timestamp, partition));
-		}
-		else
-		{
-			m_consumeCount.addAndGet(offsetStat.updateOffset(offset, timestamp));
+			if (offsetStat == null)
+			{
+				m_partitionStats.put(partition, new OffsetStat(offset, timestamp, partition));
+			}
+			else
+			{
+				long time = timestamp - offsetStat.getTimestamp();
+
+				//make sure the time really changed
+				if (time != 0)
+				{
+					long diff = OffsetStat.calculateDiff(offset, offsetStat.getOffset());
+
+					double rate = (double) diff / (double) time;
+
+					m_processRate.addRate(rate);
+
+					m_consumeCount += offsetStat.updateOffset(offset, timestamp);
+				}
+			}
 		}
 	}
 
-	public long getAndResetCounter()
+	public long getConsumeCount()
 	{
-		return m_consumeCount.getAndSet(0L);
+		return m_consumeCount;
 	}
 
 	public List<OffsetStat> getOffsetStats()

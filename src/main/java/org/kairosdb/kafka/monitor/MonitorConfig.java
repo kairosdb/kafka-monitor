@@ -3,7 +3,6 @@ package org.kairosdb.kafka.monitor;
 import com.google.common.base.Splitter;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
-import jnr.ffi.annotations.In;
 
 import java.util.Collections;
 import java.util.Map;
@@ -57,12 +56,20 @@ public class MonitorConfig
 	private String m_groupLagMetric = "group_lag";
 
 	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.metric.group_lag")
+	private String m_groupTimeToProcessMetric = "group_time_to_process";
+
+	@Inject(optional = true)
 	@Named("kairosdb.kafka_monitor.metric.offset_gather_time_ms")
-	private String m_offsetGatherTime = "offset_gather_time";
+	private String m_offsetGatherTimeMetric = "offset_gather_time";
 
 	@Inject(optional = true)
 	@Named("kairosdb.kafka_monitor.metric.gather_failure")
 	private String m_gatherFailureMetric = "gather_failure";
+
+	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.exclude_monitor_offsets")
+	private boolean m_excludeMonitorOffsets = true;
 
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
 
@@ -134,18 +141,28 @@ public class MonitorConfig
 		return m_metricPrefix + m_groupLagMetric;
 	}
 
-	public String getOffsetGatherTime()
+	public String getGroupTimeToProcessMetric()
 	{
-		return m_metricPrefix + m_offsetGatherTime;
+		return m_metricPrefix + m_groupTimeToProcessMetric;
+	}
+
+	public String getOffsetGatherTimeMetric()
+	{
+		return m_metricPrefix + m_offsetGatherTimeMetric;
 	}
 
 	public String getGatherFailureMetric()
 	{
-		return m_gatherFailureMetric;
+		return m_metricPrefix + m_gatherFailureMetric;
 	}
 
 	public Map<String, String> getAdditionalTags()
 	{
 		return m_additionalTags;
+	}
+
+	public boolean isExcludeMonitorOffsets()
+	{
+		return m_excludeMonitorOffsets;
 	}
 }

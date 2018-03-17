@@ -4,7 +4,6 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
-import com.google.inject.name.Named;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -41,8 +40,7 @@ import static org.kairosdb.kafka.monitor.OffsetStat.calculateDiff;
 import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
 import static org.quartz.TriggerBuilder.newTrigger;
 
-//todo make topics configurable
-//todo make all configurations configurable
+//todo Add configuration to expire tracked offsets
 
 public class OffsetListenerService implements KairosDBService, KairosDBJob
 {
@@ -79,7 +77,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		m_kafkaTopics = m_consumer.listTopics();
 
 		//todo change to debug statement
-		System.out.println("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
+		//dSystem.out.println("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 	}
 
 
@@ -109,7 +107,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 		//Stream to listen to offset changes
 		KStreamBuilder offsetStreamBuilder = new KStreamBuilder();
-		offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
+		KStream<String, Offset> offsetStream = offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
 				.filter(new Predicate<Bytes, Bytes>()
 				{
 					@Override
@@ -150,7 +148,22 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 						return new KeyValue<String, Offset>(offset.getTopic(), offset);
 					}
-				}).groupByKey(Serdes.String(), new Offset.OffsetSerde())
+				});
+
+		if (m_monitorConfig.isExcludeMonitorOffsets())
+		{
+			final String applicationId = m_monitorConfig.getApplicationId();
+			offsetStream = offsetStream.filter(new Predicate<String, Offset>()
+			{
+				@Override
+				public boolean test(String key, Offset value)
+				{
+					return (!value.getGroup().startsWith(applicationId));
+				}
+			});
+		}
+
+		offsetStream.groupByKey(Serdes.String(), new Offset.OffsetSerde())
 				.aggregate(new Initializer<String>()
 				           {
 					           @Override
@@ -292,10 +305,17 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		{
 			Stopwatch timer = Stopwatch.createStarted();
 
-			//todo grab a copy of all consumer offsets before processing
-			//we are getting consumers that are ahead of the head by the time we report
+			//Copy of m_groupStatsMap to use while reporting stats
+			Map<Pair<String, String>, GroupStats> currentStats = new HashMap<>();
 
-			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = m_groupStatsMap.entrySet();
+			//grab a copy of all consumer offsets before processing
+			for (GroupStats groupStats : m_groupStatsMap.values())
+			{
+				currentStats.put(Pair.of(groupStats.getTopic(), groupStats.getGroupName()), groupStats.copyAndReset());
+			}
+
+
+			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = currentStats.entrySet();
 			for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : entrySet)
 			{
 				if (!m_topics.contains(groupStatsEntry.getValue().getTopic()))
@@ -316,7 +336,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				//todo make it optional if we report our own offsets
 				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
 						groupTags,
-						m_dataPointFactory.createDataPoint(now, groupStats.getAndResetCounter()));
+						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
 				m_publisher.post(event);
 
 				long groupLag = 0;
@@ -353,6 +373,16 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupLag));
 				m_publisher.post(groupLagEvent);
+
+
+				System.out.println("Group Lag: "+groupLag);
+				System.out.println("Rate: "+groupStats.getCurrentRate());
+				long msToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
+				System.out.println("MSToProcess "+msToProcess);
+				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
+						groupTags,
+						m_dataPointFactory.createDataPoint(now, msToProcess));
+				m_publisher.post(groupMsToProcessEvent);
 
 				//todo set last offsets with current - put this in external object.
 			}
@@ -393,7 +423,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					.putAll(m_monitorConfig.getAdditionalTags())
 					.put("host", m_clientId).build();
 
-			DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTime(),
+			DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTimeMetric(),
 					offsetTags,
 					m_dataPointFactory.createDataPoint(now, timer.stop().elapsed(TimeUnit.MILLISECONDS)));
 			m_publisher.post(offsetTimeEvent);
