@@ -9,7 +9,7 @@ public class TestGroupStats
 	@Test
 	public void test_initialOffsets()
 	{
-		GroupStats gs = new GroupStats("foo", "topic");
+		GroupStats gs = new GroupStats("foo", "topic", 10);
 
 		gs.offsetChange(1, 5, 1000);
 		gs.offsetChange(2, 5, 1000);
@@ -22,7 +22,7 @@ public class TestGroupStats
 	@Test
 	public void test_updateOffsets()
 	{
-		GroupStats gs = new GroupStats("foo", "topic");
+		GroupStats gs = new GroupStats("foo", "topic", 10);
 
 		gs.offsetChange(1, 5, 1000);
 		gs.offsetChange(2, 5, 1000);
@@ -35,7 +35,7 @@ public class TestGroupStats
 	@Test
 	public void test_offsetChangeWithNoTimeChange()
 	{
-		GroupStats gs = new GroupStats("foo", "topic");
+		GroupStats gs = new GroupStats("foo", "topic", 10);
 
 		gs.offsetChange(1, 5, 1000);
 		gs.offsetChange(2, 5, 1000);

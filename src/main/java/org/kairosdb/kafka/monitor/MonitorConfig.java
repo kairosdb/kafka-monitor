@@ -71,6 +71,10 @@ public class MonitorConfig
 	@Named("kairosdb.kafka_monitor.exclude_monitor_offsets")
 	private boolean m_excludeMonitorOffsets = true;
 
+	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.rete_tracker_size")
+	private int m_rateTrackerSize = 100;
+
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
 
 	@Inject(optional = true)
@@ -164,5 +168,10 @@ public class MonitorConfig
 	public boolean isExcludeMonitorOffsets()
 	{
 		return m_excludeMonitorOffsets;
+	}
+
+	public int getRateTrackerSize()
+	{
+		return m_rateTrackerSize;
 	}
 }

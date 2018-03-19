@@ -34,6 +34,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.kairosdb.kafka.monitor.OffsetStat.calculateDiff;
@@ -56,6 +57,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>(); //periodically updated list of topics in kafka
 	private final MonitorConfig m_monitorConfig;
 	private final String m_clientId;
+	private final ReentrantLock m_executeLock = new ReentrantLock();
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus,
@@ -225,7 +227,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 		if (groupStats == null)
 		{
-			groupStats = new GroupStats(value.getGroup(), value.getTopic());
+			groupStats = new GroupStats(value.getGroup(), value.getTopic(),
+					m_monitorConfig.getRateTrackerSize());
 			m_groupStatsMap.put(groupKey, groupStats);
 		}
 
@@ -301,6 +304,10 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		//reporting the same metric they will just overwrite each other.
 		long now = DateUtils.round(new Date(), Calendar.MINUTE).getTime();
 
+		//If the previous run is still reporting we bail out
+		if (!m_executeLock.tryLock())
+			return;
+
 		try
 		{
 			Stopwatch timer = Stopwatch.createStarted();
@@ -375,10 +382,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				m_publisher.post(groupLagEvent);
 
 
-				System.out.println("Group Lag: "+groupLag);
-				System.out.println("Rate: "+groupStats.getCurrentRate());
 				long msToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
-				System.out.println("MSToProcess "+msToProcess);
 				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, msToProcess));
@@ -453,6 +457,10 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			{
 				logger.error("Failed to start monitor service", e1);
 			}
+		}
+		finally
+		{
+			m_executeLock.unlock();
 		}
 	}
 }

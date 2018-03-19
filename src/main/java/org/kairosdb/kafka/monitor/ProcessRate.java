@@ -2,6 +2,9 @@ package org.kairosdb.kafka.monitor;
 
 import com.google.common.collect.EvictingQueue;
 
+/**
+ Used to calculate the time to process the lag
+ */
 public class ProcessRate
 {
 	private final EvictingQueue<Double> m_processRates;

@@ -16,9 +16,9 @@ public class GroupStats
 	private final ProcessRate m_processRate;
 
 
-	public GroupStats(String groupName, String topic)
+	public GroupStats(String groupName, String topic, int trackerCount)
 	{
-		this(groupName, topic, new ProcessRate(10));
+		this(groupName, topic, new ProcessRate(trackerCount));
 	}
 
 	private GroupStats(String groupName, String topic, ProcessRate processRate)
@@ -85,7 +85,7 @@ public class GroupStats
 				long time = timestamp - offsetStat.getTimestamp();
 
 				//make sure the time really changed
-				if (time != 0)
+				if (time > 0)
 				{
 					long diff = OffsetStat.calculateDiff(offset, offsetStat.getOffset());
 
