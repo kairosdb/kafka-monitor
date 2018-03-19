@@ -73,7 +73,7 @@ public class MonitorConfig
 
 	@Inject(optional = true)
 	@Named("kairosdb.kafka_monitor.rete_tracker_size")
-	private int m_rateTrackerSize = 100;
+	private int m_rateTrackerSize = 10;
 
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
 

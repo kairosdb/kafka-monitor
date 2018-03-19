@@ -1,10 +1,12 @@
 package org.kairosdb.kafka.monitor;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class GroupStats
 {
@@ -14,6 +16,7 @@ public class GroupStats
 	private final Map<Integer, OffsetStat> m_partitionStats;
 	private final Object m_offsetLock = new Object();
 	private final ProcessRate m_processRate;
+	private Stopwatch m_rateTimer;
 
 
 	public GroupStats(String groupName, String topic, int trackerCount)
@@ -27,6 +30,13 @@ public class GroupStats
 		m_topic = topic;
 		m_partitionStats = new ConcurrentHashMap<>();
 		m_processRate = processRate;
+		m_rateTimer = Stopwatch.createStarted();
+	}
+
+	//For testing
+	protected void setRateTimer(Stopwatch stopwatch)
+	{
+		m_rateTimer = stopwatch;
 	}
 
 	/**
@@ -39,6 +49,11 @@ public class GroupStats
 
 		synchronized (m_offsetLock)
 		{
+			long elapsed = m_rateTimer.elapsed(TimeUnit.SECONDS);
+			m_rateTimer.reset().start();
+
+			m_processRate.addRate((double)m_consumeCount / (double)elapsed);
+
 			copy.m_consumeCount = m_consumeCount;
 			m_consumeCount = 0L;
 
@@ -84,15 +99,9 @@ public class GroupStats
 			{
 				long time = timestamp - offsetStat.getTimestamp();
 
-				//make sure the time really changed
+				//make sure the time really changed in the right direction
 				if (time > 0)
 				{
-					long diff = OffsetStat.calculateDiff(offset, offsetStat.getOffset());
-
-					double rate = (double) diff / (double) time;
-
-					m_processRate.addRate(rate);
-
 					m_consumeCount += offsetStat.updateOffset(offset, timestamp);
 				}
 			}

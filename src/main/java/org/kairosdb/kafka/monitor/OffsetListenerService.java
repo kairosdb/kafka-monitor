@@ -51,13 +51,14 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private final LongDataPointFactory m_dataPointFactory;
 	private KafkaStreams m_offsetStream;
 	private KafkaStreams m_topicOwnerStream;
-	private Set<String> m_topics = new ConcurrentHashSet<>();
-	private Map<Pair<String, String>, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
+
 	private KafkaConsumer<Bytes, Bytes> m_consumer;
 	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>(); //periodically updated list of topics in kafka
 	private final MonitorConfig m_monitorConfig;
 	private final String m_clientId;
 	private final ReentrantLock m_executeLock = new ReentrantLock();
+
+	private final OffsetsTracker m_offsetsTracker;
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus,
@@ -68,6 +69,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		m_dataPointFactory = dataPointFactory;
 		m_monitorConfig = monitorConfig;
 		m_clientId = m_monitorConfig.getClientId();
+
+		m_offsetsTracker = new OffsetsTracker(m_monitorConfig.getRateTrackerSize());
 	}
 
 	//Called by external job to refresh our partition data
@@ -181,9 +184,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 							{
 								//Collect the data on our offsets and then notify others
 								//we own this topic
-								m_topics.add(value.getTopic());
-
-								collectData(value);
+								m_offsetsTracker.updateOffset(value);
 
 								return m_clientId;
 							}
@@ -201,7 +202,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					{
 						//System.out.println(value + " owns topic "+ key);
 						if (!value.equals(m_clientId))
-							m_topics.remove(key); //We do not own the topic anymore
+							m_offsetsTracker.removeTrackedTopic(key); //We do not own the topic anymore
 					}
 				});
 
@@ -216,24 +217,6 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	}
 
 
-	/**
-	 Collects and maintains a map of consumer offsets
-	 @param value
-	 */
-	private void collectData(Offset value)
-	{
-		Pair<String, String> groupKey = Pair.of(value.getTopic(), value.getGroup());
-		GroupStats groupStats = m_groupStatsMap.get(groupKey);
-
-		if (groupStats == null)
-		{
-			groupStats = new GroupStats(value.getGroup(), value.getTopic(),
-					m_monitorConfig.getRateTrackerSize());
-			m_groupStatsMap.put(groupKey, groupStats);
-		}
-
-		groupStats.offsetChange(value.getPartition(), value.getOffset(), value.getCommitTime());
-	}
 
 	@Override
 	public void stop()
@@ -312,27 +295,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		{
 			Stopwatch timer = Stopwatch.createStarted();
 
-			//Copy of m_groupStatsMap to use while reporting stats
-			Map<Pair<String, String>, GroupStats> currentStats = new HashMap<>();
-
-			//grab a copy of all consumer offsets before processing
-			for (GroupStats groupStats : m_groupStatsMap.values())
+			for (GroupStats groupStats : m_offsetsTracker.copyOfCurrentStats())
 			{
-				currentStats.put(Pair.of(groupStats.getTopic(), groupStats.getGroupName()), groupStats.copyAndReset());
-			}
-
-
-			Set<Map.Entry<Pair<String, String>, GroupStats>> entrySet = currentStats.entrySet();
-			for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : entrySet)
-			{
-				if (!m_topics.contains(groupStatsEntry.getValue().getTopic()))
-				{
-					entrySet.remove(groupStatsEntry);
-					continue; //We don't own this topic anymore
-				}
-
-				GroupStats groupStats = groupStatsEntry.getValue();
-
 				Map<Integer, Long> latestOffsets = getLatestTopicOffsets(groupStats.getTopic());
 
 				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
@@ -382,17 +346,16 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				m_publisher.post(groupLagEvent);
 
 
-				long msToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
+				long secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
 				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
 						groupTags,
-						m_dataPointFactory.createDataPoint(now, msToProcess));
+						m_dataPointFactory.createDataPoint(now, secToProcess));
 				m_publisher.post(groupMsToProcessEvent);
-
-				//todo set last offsets with current - put this in external object.
 			}
 
+
 			//iterate through our topics and report producer rate
-			for (String topic : m_topics)
+			for (String topic : m_offsetsTracker.getTopics())
 			{
 				Map<Integer, Long> lastOffsets = m_lastTopicOffsets.get(topic);
 				Map<Integer, Long> currentOffsets = m_currentTopicOffsets.get(topic);

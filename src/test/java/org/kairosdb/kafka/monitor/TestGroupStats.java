@@ -1,8 +1,14 @@
 package org.kairosdb.kafka.monitor;
 
+import com.google.common.base.Stopwatch;
 import org.junit.Test;
 
+import java.util.concurrent.TimeUnit;
+
+import static org.mockito.Mockito.mock;
+
 import static junit.framework.Assert.assertEquals;
+import static org.mockito.Mockito.when;
 
 public class TestGroupStats
 {
@@ -22,6 +28,11 @@ public class TestGroupStats
 	@Test
 	public void test_updateOffsets()
 	{
+		Stopwatch rateTimer = mock(Stopwatch.class);
+		when(rateTimer.start()).thenReturn(rateTimer);
+		when(rateTimer.reset()).thenReturn(rateTimer);
+		when(rateTimer.elapsed(TimeUnit.SECONDS)).thenReturn(1L);
+
 		GroupStats gs = new GroupStats("foo", "topic", 10);
 
 		gs.offsetChange(1, 5, 1000);
