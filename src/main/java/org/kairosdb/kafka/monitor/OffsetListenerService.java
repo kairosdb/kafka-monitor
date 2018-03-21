@@ -302,6 +302,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 						.putAll(m_monitorConfig.getAdditionalTags())
 						.put("group", groupStats.getGroupName())
+						.put("proxy_group", groupStats.getProxyGroup())
 						.put("topic", groupStats.getTopic()).build();
 
 				//todo make it optional if we report our own offsets
@@ -319,6 +320,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					ImmutableSortedMap<String, String> partitionTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 							.putAll(m_monitorConfig.getAdditionalTags())
 							.put("group", groupStats.getGroupName())
+							.put("proxy_group", groupStats.getProxyGroup())
 							.put("topic", groupStats.getTopic())
 							.put("partition", String.valueOf(offsetStat.getPartition())).build();
 
@@ -346,7 +348,10 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				m_publisher.post(groupLagEvent);
 
 
-				long secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
+				long secToProcess = 0;
+				if (groupStats.getCurrentRate() != 0.0)
+					secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
+
 				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, secToProcess));

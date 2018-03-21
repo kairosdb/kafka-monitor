@@ -1,7 +1,7 @@
 package org.kairosdb.kafka.monitor;
 
-import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import org.kairosdb.kafka.monitor.util.Stopwatch;
 
 import java.util.List;
 import java.util.Map;
@@ -12,6 +12,7 @@ public class GroupStats
 {
 	private final String m_groupName;
 	private final String m_topic;
+	private final String m_proxyGroup; //rest proxy combines group and topic with __
 	private long m_consumeCount;
 	private final Map<Integer, OffsetStat> m_partitionStats;
 	private final Object m_offsetLock = new Object();
@@ -31,6 +32,14 @@ public class GroupStats
 		m_partitionStats = new ConcurrentHashMap<>();
 		m_processRate = processRate;
 		m_rateTimer = Stopwatch.createStarted();
+
+		if (m_groupName.contains("__"))
+		{
+			int index = m_groupName.lastIndexOf("__");
+			m_proxyGroup = m_groupName.substring(0, index);
+		}
+		else
+			m_proxyGroup = m_groupName;
 	}
 
 	//For testing
@@ -74,6 +83,11 @@ public class GroupStats
 	public String getTopic()
 	{
 		return m_topic;
+	}
+
+	public String getProxyGroup()
+	{
+		return m_proxyGroup;
 	}
 
 	/**
