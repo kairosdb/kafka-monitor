@@ -7,7 +7,10 @@ import com.google.inject.Inject;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
@@ -46,6 +49,7 @@ import static org.quartz.TriggerBuilder.newTrigger;
 public class OffsetListenerService implements KairosDBService, KairosDBJob
 {
 	private static final Logger logger = LoggerFactory.getLogger(OffsetListenerService.class);
+	public static final String OFFSET_TOPIC = "__consumer_offsets";
 
 	private final Publisher<DataPointEvent> m_publisher;
 	private final LongDataPointFactory m_dataPointFactory;
@@ -85,6 +89,22 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		//dSystem.out.println("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 	}
 
+	private void resetOffsets()
+	{
+		updateKafkaTopics();
+
+		List<PartitionInfo> offsetPartitions = m_kafkaTopics.get(OFFSET_TOPIC);
+
+		Map<TopicPartition, OffsetAndMetadata> updatedOffsets = new HashMap<>();
+		for (PartitionInfo partitionInfo : offsetPartitions)
+		{
+			updatedOffsets.put(new TopicPartition(OFFSET_TOPIC, partitionInfo.partition()),
+					new OffsetAndMetadata(0L));
+		}
+
+		m_consumer.commitSync(updatedOffsets);
+	}
+
 
 	@Override
 	public void start() throws KairosDBException
@@ -100,6 +120,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		defaultConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
 		defaultConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
 		defaultConfig.put("exclude.internal.topics", "false");
+		defaultConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+		defaultConfig.put(ProducerConfig.RETRIES_CONFIG, 10);
+		defaultConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30*1000);
 
 		Properties offsetProperties = (Properties) defaultConfig.clone();
 		Properties ownerProperties = (Properties) defaultConfig.clone();
@@ -108,11 +131,15 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 		Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
 
+		defaultConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
 		m_consumer = new KafkaConsumer<Bytes, Bytes>(defaultConfig);
+
+		resetOffsets();
 
 		//Stream to listen to offset changes
 		KStreamBuilder offsetStreamBuilder = new KStreamBuilder();
-		KStream<String, Offset> offsetStream = offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), "__consumer_offsets")
+		KStream<String, Offset> offsetStream = offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), OFFSET_TOPIC)
 				.filter(new Predicate<Bytes, Bytes>()
 				{
 					@Override
