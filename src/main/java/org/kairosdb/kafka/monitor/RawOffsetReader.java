@@ -116,6 +116,7 @@ public class RawOffsetReader extends TopicReader
 				Offset offset = Offset.createFromBytes(record.key().get(), record.value().get());
 
 				//todo check if our own offsets
+				//todo !value.getTopic().equals(OFFSET_TOPIC)
 				if (m_monitorConfig.isExcludeMonitorOffsets() && offset.getGroup().startsWith(m_monitorConfig.getApplicationId()))
 				{
 					System.out.println(offset.getGroup());

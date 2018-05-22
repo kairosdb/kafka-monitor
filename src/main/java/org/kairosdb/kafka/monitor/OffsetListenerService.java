@@ -200,7 +200,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	{
 		//time to report metrics - round to nearest minute so in the edge case of multiple monitors
 		//reporting the same metric they will just overwrite each other.
-		long now = DateUtils.round(new Date(), Calendar.MINUTE).getTime();
+		long now = DateUtils.truncate(new Date(), Calendar.MINUTE).getTime();
 
 		//If the previous run is still reporting we bail out
 		if (!m_executeLock.tryLock())
