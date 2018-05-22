@@ -179,7 +179,7 @@ public class Offset
 		}
 	}
 
-	private static class OffsetSerializer implements Serializer<Offset>
+	public static class OffsetSerializer implements Serializer<Offset>
 	{
 		@Override
 		public void configure(Map<String, ?> configs, boolean isKey) { }
@@ -210,7 +210,7 @@ public class Offset
 		public void close() { }
 	}
 
-	private static class OffsetDeserializer implements Deserializer<Offset>
+	public static class OffsetDeserializer implements Deserializer<Offset>
 	{
 		@Override
 		public void configure(Map<String, ?> configs, boolean isKey) { }

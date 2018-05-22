@@ -5,21 +5,10 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import org.apache.commons.lang3.time.DateUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.*;
-import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.kairosdb.core.KairosDBService;
 import org.kairosdb.core.datapoints.LongDataPointFactory;
 import org.kairosdb.core.exception.KairosDBException;
@@ -33,9 +22,8 @@ import org.quartz.Trigger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
+import javax.inject.Named;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -53,194 +41,90 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 	private final Publisher<DataPointEvent> m_publisher;
 	private final LongDataPointFactory m_dataPointFactory;
-	private KafkaStreams m_offsetStream;
-	private KafkaStreams m_topicOwnerStream;
 
-	private KafkaConsumer<Bytes, Bytes> m_consumer;
-	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>(); //periodically updated list of topics in kafka
+	private KafkaConsumer<Bytes, Bytes> m_offsetConsumer;
 	private final MonitorConfig m_monitorConfig;
 	private final String m_clientId;
 	private final ReentrantLock m_executeLock = new ReentrantLock();
 
 	private final OffsetsTracker m_offsetsTracker;
+	private final Properties m_defaultConfig;
+
+	private RawOffsetReader m_rawOffsetReader;
+	private PartitionedOffsetReader m_partitionedOffsetReader;
+	private OwnerReader m_ownerReader;
+
+	private long m_runCounter = 0; //Counts how many times metrics have been reported, used to now when to update topics
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus,
 			LongDataPointFactory dataPointFactory,
-			MonitorConfig monitorConfig)
+			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker,
+			@Named("DefaultConfig")Properties defaultConfig)
 	{
 		m_publisher = checkNotNull(eventBus).createPublisher(DataPointEvent.class);
 		m_dataPointFactory = dataPointFactory;
 		m_monitorConfig = monitorConfig;
 		m_clientId = m_monitorConfig.getClientId();
 
-		m_offsetsTracker = new OffsetsTracker(m_monitorConfig.getRateTrackerSize());
+		m_offsetsTracker = offsetsTracker;
+		m_defaultConfig = defaultConfig;
 	}
 
 	//Called by external job to refresh our partition data
-	//todo add external kairosDBJob that calls this every 10 min or so
 	public void updateKafkaTopics()
 	{
 		Stopwatch timer = Stopwatch.createStarted();
 
-		m_kafkaTopics = m_consumer.listTopics();
+		if (m_offsetConsumer != null)  //may not have been initialized when this is called the first time
+			m_offsetsTracker.updateTopics(m_offsetConsumer.listTopics());
 
-		//todo change to debug statement
-		//dSystem.out.println("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
-	}
-
-	private void resetOffsets()
-	{
-		updateKafkaTopics();
-
-		List<PartitionInfo> offsetPartitions = m_kafkaTopics.get(OFFSET_TOPIC);
-
-		Map<TopicPartition, OffsetAndMetadata> updatedOffsets = new HashMap<>();
-		for (PartitionInfo partitionInfo : offsetPartitions)
-		{
-			updatedOffsets.put(new TopicPartition(OFFSET_TOPIC, partitionInfo.partition()),
-					new OffsetAndMetadata(0L));
-		}
-
-		m_consumer.commitSync(updatedOffsets);
+		logger.info("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 	}
 
 
 	@Override
 	public void start() throws KairosDBException
 	{
-		final Properties defaultConfig = new Properties();
 
-		defaultConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, m_monitorConfig.getApplicationId());
-		defaultConfig.put(StreamsConfig.CLIENT_ID_CONFIG, m_clientId);
-		defaultConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, m_monitorConfig.getBootStrapServers());
-		defaultConfig.put(StreamsConfig.STATE_DIR_CONFIG, m_monitorConfig.getStreamStateDirectory());
-		defaultConfig.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.streams.processor.WallclockTimestampExtractor");
-		defaultConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-		defaultConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
-		defaultConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
-		defaultConfig.put("exclude.internal.topics", "false");
-		defaultConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-		defaultConfig.put(ProducerConfig.RETRIES_CONFIG, 10);
-		defaultConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30*1000);
-
-		Properties offsetProperties = (Properties) defaultConfig.clone();
-		Properties ownerProperties = (Properties) defaultConfig.clone();
-		offsetProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
+		//Kafka uses the thread context loader to load stuff.  We have to swap
+		//it with the one that loaded this class as Kairos loaded this plugin
+		//in a separate class loader.
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 		Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
 
-		defaultConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+		m_rawOffsetReader = new RawOffsetReader(m_defaultConfig, m_monitorConfig, 0);
+		m_partitionedOffsetReader = new PartitionedOffsetReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
+		m_ownerReader = new OwnerReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
 
-		m_consumer = new KafkaConsumer<Bytes, Bytes>(defaultConfig);
 
-		resetOffsets();
+		Properties offsetProperties = (Properties) m_defaultConfig.clone();
 
-		//Stream to listen to offset changes
-		KStreamBuilder offsetStreamBuilder = new KStreamBuilder();
-		KStream<String, Offset> offsetStream = offsetStreamBuilder.stream(Serdes.Bytes(), Serdes.Bytes(), OFFSET_TOPIC)
-				.filter(new Predicate<Bytes, Bytes>()
-				{
-					@Override
-					public boolean test(Bytes key, Bytes value)
-					{
-						if (key != null && value != null)
-						{
-							//This code only handles versions 0 and 1 of the offsets
-							//version 2 appears to mean something else
-							ByteBuffer bbkey = ByteBuffer.wrap(key.get());
-							if (bbkey.getShort() > 1)
-							{
-								logger.debug("Unknown key {}", key);
-								logger.debug("Unknown value: {}", value);
-								return false;
-							}
+		m_offsetConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
 
-							ByteBuffer bbvalue = ByteBuffer.wrap(value.get());
-							if (bbvalue.getShort() > 1)
-							{
-								logger.debug("Unknown value: {}", value);
-								return false;
-							}
+		updateKafkaTopics();
+		//resetOffsets();
 
-							return true;
-						}
-						else
-							return false;
-					}
-				})
-				.map(new KeyValueMapper<Bytes, Bytes, KeyValue<String, Offset>>()
-				{
-					@Override
-					public KeyValue<String, Offset> apply(Bytes key, Bytes value)
-					{
-						//Map the offsets by topic for load balancing
-						Offset offset = Offset.createFromBytes(key.get(), value.get());
 
-						return new KeyValue<String, Offset>(offset.getTopic(), offset);
-					}
-				});
-
-		if (m_monitorConfig.isExcludeMonitorOffsets())
+		try
 		{
-			final String applicationId = m_monitorConfig.getApplicationId();
-			offsetStream = offsetStream.filter(new Predicate<String, Offset>()
-			{
-				@Override
-				public boolean test(String key, Offset value)
-				{
-					return (!value.getGroup().startsWith(applicationId));
-				}
-			});
+			m_rawOffsetReader.startReader();
+			m_partitionedOffsetReader.startReader();
+			m_ownerReader.startReader();
 		}
+		catch (Exception e)
+		{
+			logger.error("Unable to start kafka consumers", e);
 
-		offsetStream.groupByKey(Serdes.String(), new Offset.OffsetSerde())
-				.aggregate(new Initializer<String>()
-				           {
-					           @Override
-					           public String apply()
-					           {
-						           return m_clientId;
-					           }
-				           },
-						new Aggregator<String, Offset, String>()
-						{
-							@Override
-							public String apply(String key, Offset value, String aggregate)
-							{
-								//Collect the data on our offsets and then notify others
-								//we own this topic
-								m_offsetsTracker.updateOffset(value);
-
-								return m_clientId;
-							}
-						},
-						Serdes.String(), "stream").to(Serdes.String(), Serdes.String(), m_monitorConfig.getTopicOwnerTopicName());
-
-
-		ownerProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, m_monitorConfig.getApplicationId()+"_"+m_clientId); //cannot have the same app id
-		KStreamBuilder topicOwnerBuilder = new KStreamBuilder();
-		topicOwnerBuilder.stream(Serdes.String(), Serdes.String(), m_monitorConfig.getTopicOwnerTopicName())
-				.foreach(new ForeachAction<String, String>()
-				{
-					@Override
-					public void apply(String key, String value)
-					{
-						//System.out.println(value + " owns topic "+ key);
-						if (!value.equals(m_clientId))
-							m_offsetsTracker.removeTrackedTopic(key); //We do not own the topic anymore
-					}
-				});
-
-		m_offsetStream = new KafkaStreams(offsetStreamBuilder, offsetProperties);
-		m_offsetStream.start();
-
-		m_topicOwnerStream = new KafkaStreams(topicOwnerBuilder, ownerProperties);
-		m_topicOwnerStream.start();
-
-		//put it back
-		Thread.currentThread().setContextClassLoader(contextClassLoader);
+			m_rawOffsetReader.stopReader();
+			m_partitionedOffsetReader.stopReader();
+			m_ownerReader.stopReader();
+		}
+		finally
+		{
+			//put it back
+			Thread.currentThread().setContextClassLoader(contextClassLoader);
+		}
 	}
 
 
@@ -248,8 +132,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	@Override
 	public void stop()
 	{
-		m_offsetStream.close(30, TimeUnit.SECONDS);
-		m_topicOwnerStream.close(30, TimeUnit.SECONDS);
+		m_rawOffsetReader.stopReader();
+		m_partitionedOffsetReader.stopReader();
+		m_ownerReader.stopReader();
 	}
 
 	@Override
@@ -280,19 +165,22 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		ret = new HashMap<>();
 		m_currentTopicOffsets.put(topic, ret);
 
-		List<PartitionInfo> partitionInfos = m_kafkaTopics.get(topic);
+		List<PartitionInfo> partitionInfos = m_offsetsTracker.getPartitionInfo(topic);
 
 		if (partitionInfos == null)
+		{
 			updateKafkaTopics();
+			partitionInfos = m_offsetsTracker.getPartitionInfo(topic);
+		}
 
-		partitionInfos = m_kafkaTopics.get(topic);
+
 		List<TopicPartition> partitions = new ArrayList<>();
 		for (PartitionInfo partitionInfo : partitionInfos)
 		{
 			partitions.add(new TopicPartition(topic, partitionInfo.partition()));
 		}
 
-		Map<TopicPartition, Long> topicPartitionLongMap = m_consumer.endOffsets(partitions);
+		Map<TopicPartition, Long> topicPartitionLongMap = m_offsetConsumer.endOffsets(partitions);
 
 		for (Map.Entry<TopicPartition, Long> entry : topicPartitionLongMap.entrySet())
 		{
@@ -332,7 +220,6 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						.put("proxy_group", groupStats.getProxyGroup())
 						.put("topic", groupStats.getTopic()).build();
 
-				//todo make it optional if we report our own offsets
 				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
@@ -353,7 +240,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 					DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
 							partitionTags,
-							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getTimestamp())));
+							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getCommitTime())));
 					m_publisher.post(offsetAge);
 
 					Long latestOffset = latestOffsets.get(offsetStat.getPartition());
@@ -457,5 +344,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		{
 			m_executeLock.unlock();
 		}
+
+		m_runCounter ++;
+		if (m_runCounter % 15 == 0) //update topics every 15 min
+			updateKafkaTopics();
 	}
 }

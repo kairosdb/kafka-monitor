@@ -31,10 +31,10 @@ public class TestGroupStats
 		GroupStats gs = new GroupStats("foo", "topic", 10);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000);
-		gs.offsetChange(2, 5, 1000);
-		gs.offsetChange(3, 5, 1000);
-		gs.offsetChange(4, 5, 1000);
+		gs.offsetChange(1, 5, 1000, 2000);
+		gs.offsetChange(2, 5, 1000, 2000);
+		gs.offsetChange(3, 5, 1000, 2000);
+		gs.offsetChange(4, 5, 1000, 2000);
 
 		gs = gs.copyAndReset();
 
@@ -49,10 +49,10 @@ public class TestGroupStats
 		GroupStats gs = new GroupStats("foo", "topic", 10);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000);
-		gs.offsetChange(2, 5, 1000);
-		gs.offsetChange(1, 15, 2000);
-		gs.offsetChange(2, 15, 2000);
+		gs.offsetChange(1, 5, 1000, 2000);
+		gs.offsetChange(2, 5, 1000, 2000);
+		gs.offsetChange(1, 15, 2000, 2000);
+		gs.offsetChange(2, 15, 2000, 2000);
 
 		gs = gs.copyAndReset();
 
@@ -66,10 +66,10 @@ public class TestGroupStats
 		GroupStats gs = new GroupStats("foo", "topic", 10);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000);
-		gs.offsetChange(2, 5, 1000);
-		gs.offsetChange(1, 15, 1000);
-		gs.offsetChange(2, 15, 1000);
+		gs.offsetChange(1, 5, 1000, 2000);
+		gs.offsetChange(2, 5, 1000, 2000);
+		gs.offsetChange(1, 15, 1000, 2000);
+		gs.offsetChange(2, 15, 1000, 2000);
 
 		gs = gs.copyAndReset();
 

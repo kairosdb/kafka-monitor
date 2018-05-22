@@ -54,6 +54,7 @@ public class GroupStats
 	 */
 	public GroupStats copyAndReset()
 	{
+		long now = System.currentTimeMillis();
 		GroupStats copy = new GroupStats(m_groupName, m_topic, m_processRate);
 
 		synchronized (m_offsetLock)
@@ -68,7 +69,10 @@ public class GroupStats
 
 			for (Map.Entry<Integer, OffsetStat> offset : m_partitionStats.entrySet())
 			{
-				copy.m_partitionStats.put(offset.getKey(), offset.getValue().copy());
+				if (now < offset.getValue().getExpireTime())
+					copy.m_partitionStats.put(offset.getKey(), offset.getValue().copy());
+				else
+					m_partitionStats.remove(offset.getKey());  //Remove entry if expired so we don't track it anymore
 			}
 		}
 
@@ -99,7 +103,7 @@ public class GroupStats
 		return m_processRate.getCurrentRate();
 	}
 
-	public void offsetChange(int partition, long offset, long timestamp)
+	public void offsetChange(int partition, long offset, long commitTime, long expireTime)
 	{
 		synchronized (m_offsetLock)
 		{
@@ -107,16 +111,16 @@ public class GroupStats
 
 			if (offsetStat == null)
 			{
-				m_partitionStats.put(partition, new OffsetStat(offset, timestamp, partition));
+				m_partitionStats.put(partition, new OffsetStat(partition, offset, commitTime, expireTime));
 			}
 			else
 			{
-				long time = timestamp - offsetStat.getTimestamp();
+				long time = commitTime - offsetStat.getCommitTime();
 
 				//make sure the time really changed in the right direction
 				if (time > 0)
 				{
-					m_consumeCount += offsetStat.updateOffset(offset, timestamp);
+					m_consumeCount += offsetStat.updateOffset(offset, commitTime, expireTime);
 				}
 			}
 		}

@@ -1,10 +1,14 @@
 package org.kairosdb.kafka.monitor;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.inject.Inject;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.kafka.common.PartitionInfo;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,12 +20,14 @@ public class OffsetsTracker
 	private Set<String> m_topics = new ConcurrentHashSet<>();
 	private Map<Pair<String, String>, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
 
+	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>();
 
 	private final int m_rateTrackerSize;
 
-	public OffsetsTracker(int rateTrackerSize)
+	@Inject
+	public OffsetsTracker(MonitorConfig config)
 	{
-		m_rateTrackerSize = rateTrackerSize;
+		m_rateTrackerSize = config.getRateTrackerSize();
 	}
 
 	public void removeTrackedTopic(String topic)
@@ -48,7 +54,7 @@ public class OffsetsTracker
 			m_groupStatsMap.put(groupKey, groupStats);
 		}
 
-		groupStats.offsetChange(offset.getPartition(), offset.getOffset(), offset.getCommitTime());
+		groupStats.offsetChange(offset.getPartition(), offset.getOffset(), offset.getCommitTime(), offset.getExpireTime());
 	}
 
 	public List<GroupStats> copyOfCurrentStats()
@@ -57,7 +63,9 @@ public class OffsetsTracker
 
 		for (Map.Entry<Pair<String, String>, GroupStats> groupStatsEntry : m_groupStatsMap.entrySet())
 		{
-			if (!m_topics.contains(groupStatsEntry.getValue().getTopic()))
+			//Remove group stats if we don't own the topic or all offsets have expired
+			if (!m_topics.contains(groupStatsEntry.getValue().getTopic()) ||
+					groupStatsEntry.getValue().getOffsetStats().isEmpty())
 			{
 				m_groupStatsMap.remove(groupStatsEntry);
 				continue;  //We are not tracking this topic anymore
@@ -67,6 +75,16 @@ public class OffsetsTracker
 		}
 
 		return builder.build();
+	}
+
+	public void updateTopics(Map<String, List<PartitionInfo>> kafkaTopics)
+	{
+		m_kafkaTopics = ImmutableMap.copyOf(kafkaTopics);
+	}
+
+	public List<PartitionInfo> getPartitionInfo(String topic)
+	{
+		return m_kafkaTopics.get(topic);
 	}
 
 

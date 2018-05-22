@@ -1,40 +1,47 @@
 package org.kairosdb.kafka.monitor;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 public class OffsetStat
 {
+	private final int m_partition;
 	//todo review if needs to be atomic
 	private long m_offset;
-	private long m_timestamp;
-	private final int m_partition;
+	private long m_commitTime;
+	private long m_expireTime;
 
-	public OffsetStat(long offset, long timestamp, int partition)
+
+	public OffsetStat(int partition, long offset, long commitTime, long expireTime)
 	{
 		m_offset = offset;
-		m_timestamp = timestamp;
+		m_commitTime = commitTime;
 		m_partition = partition;
+		m_expireTime = expireTime;
 	}
 
 	public OffsetStat copy()
 	{
-		OffsetStat copy = new OffsetStat(m_offset, m_timestamp, m_partition);
+		OffsetStat copy = new OffsetStat(m_partition, m_offset, m_commitTime, m_expireTime);
 
 		return copy;
 	}
 
-	public long updateOffset(long offset, long timestamp)
+	public long updateOffset(long offset, long commitTime, long expireTime)
 	{
 		long diff = calculateDiff(offset, m_offset);
 		m_offset = offset;
-		m_timestamp = timestamp;
+		m_commitTime = commitTime;
+		m_expireTime = expireTime;
 
 		return diff;
 	}
 
-	public long getTimestamp()
+	public long getCommitTime()
 	{
-		return m_timestamp;
+		return m_commitTime;
+	}
+
+	public long getExpireTime()
+	{
+		return  m_expireTime;
 	}
 
 	public int getPartition()

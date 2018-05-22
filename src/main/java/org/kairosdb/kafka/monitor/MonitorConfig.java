@@ -32,6 +32,10 @@ public class MonitorConfig
 	private String m_topicOwnerTopicName = "kafka_monitor_topic_owner";
 
 	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.offsets_topic_name")
+	private String m_offsetsTopicName = "kafka_monitor_offsets";
+
+	@Inject(optional = true)
 	@Named("kairosdb.kafka_monitor.metric.prefix")
 	private String m_metricPrefix = "kafka_monitor.";
 
@@ -72,7 +76,7 @@ public class MonitorConfig
 	private boolean m_excludeMonitorOffsets = true;
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.rete_tracker_size")
+	@Named("kairosdb.kafka_monitor.rate_tracker_size")
 	private int m_rateTrackerSize = 10;
 
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
@@ -118,6 +122,11 @@ public class MonitorConfig
 	public String getTopicOwnerTopicName()
 	{
 		return m_topicOwnerTopicName;
+	}
+
+	public String getOffsetsTopicName()
+	{
+		return m_offsetsTopicName;
 	}
 
 	public String getConsumerRateMetric()
