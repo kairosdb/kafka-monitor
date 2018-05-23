@@ -38,15 +38,22 @@ public class ProcessRate
 		{
 			double rateSum = 0D;
 
+			//skip rates that are zero, situation may be that no data was received 
+			int usableRates = 0;
 			for (Double rate : m_processRates)
 			{
-				rateSum += rate.doubleValue();
+				if (rate.doubleValue() != 0.0)
+				{
+					usableRates ++;
+					rateSum += rate.doubleValue();
+				}
+
 			}
 
-			if (m_processRates.size() == 0)
+			if (usableRates == 0)
 				retRate = 0D;
 			else
-				retRate = rateSum / (double) m_processRates.size();
+				retRate = rateSum / (double) usableRates;
 		}
 
 		return retRate;

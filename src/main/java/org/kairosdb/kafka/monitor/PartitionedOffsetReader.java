@@ -27,6 +27,7 @@ public class PartitionedOffsetReader extends TopicReader
 	private final Properties m_consumerConfig;
 	private final MonitorConfig m_monitorConfig;
 	private final int m_instanceId;
+	private final Properties m_producerConfig;
 
 	private KafkaConsumer<String, Offset> m_consumer;
 	private KafkaProducer<String, String> m_producer;
@@ -36,26 +37,29 @@ public class PartitionedOffsetReader extends TopicReader
 	public PartitionedOffsetReader(@Named("DefaultConfig") Properties defaultConfig,
 			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker, int instanceId)
 	{
-		m_consumerConfig = (Properties) defaultConfig.clone();
 		m_monitorConfig = monitorConfig;
 		m_offsetTracker = offsetsTracker;
 		m_instanceId = instanceId;
+
+		m_consumerConfig = (Properties) defaultConfig.clone();
+
+		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_partitioned_"+m_instanceId); //cannot have the same app id
+
+		m_producerConfig = (Properties) m_consumerConfig.clone();
+
+		m_consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+		m_consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Offset.OffsetDeserializer.class);
+
+		m_producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		m_producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 	}
 
 
 	@Override
 	protected void initializeConsumers()
 	{
-		m_consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-		m_consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Offset.OffsetDeserializer.class);
-
-		m_consumerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-		m_consumerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-
-		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_partitioned_"+m_instanceId); //cannot have the same app id
 		m_consumer = new KafkaConsumer<>(m_consumerConfig);
-
-		m_producer = new KafkaProducer<>(m_consumerConfig);
+		m_producer = new KafkaProducer<>(m_producerConfig);
 
 		m_consumer.subscribe(Collections.singleton(m_monitorConfig.getOffsetsTopicName()));
 		m_consumer.seekToEnd(m_consumer.assignment());

@@ -193,6 +193,12 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		return ret;
 	}
 
+	private void postEvent(DataPointEvent event)
+	{
+		//Metrics are kinda wonky the first time through so we skip those.
+		if (m_runCounter != 0)
+			m_publisher.post(event);
+	}
 
 
 	@Override
@@ -223,7 +229,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
-				m_publisher.post(event);
+				postEvent(event);
 
 				long groupLag = 0;
 
@@ -241,7 +247,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
 							partitionTags,
 							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getCommitTime())));
-					m_publisher.post(offsetAge);
+					postEvent(offsetAge);
 
 					Long latestOffset = latestOffsets.get(offsetStat.getPartition());
 					if (latestOffset != null) //in case something goes bananas
@@ -252,14 +258,14 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
 								partitionTags,
 								m_dataPointFactory.createDataPoint(now, partitionLag));
-						m_publisher.post(partitionLagEvent);
+						postEvent(partitionLagEvent);
 					}
 				}
 
 				DataPointEvent groupLagEvent = new DataPointEvent(m_monitorConfig.getGroupLagMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupLag));
-				m_publisher.post(groupLagEvent);
+				postEvent(groupLagEvent);
 
 
 				long secToProcess = 0;
@@ -269,7 +275,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, secToProcess));
-				m_publisher.post(groupMsToProcessEvent);
+				postEvent(groupMsToProcessEvent);
 			}
 
 
@@ -296,7 +302,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				DataPointEvent producerRateEvent = new DataPointEvent(m_monitorConfig.getProducerRateMetric(),
 						producerTags,
 						m_dataPointFactory.createDataPoint(now, offsetCount));
-				m_publisher.post(producerRateEvent);
+				postEvent(producerRateEvent);
 			}
 
 
@@ -312,7 +318,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTimeMetric(),
 					offsetTags,
 					m_dataPointFactory.createDataPoint(now, timer.stop().elapsed(TimeUnit.MILLISECONDS)));
-			m_publisher.post(offsetTimeEvent);
+			postEvent(offsetTimeEvent);
 
 		}
 		catch (Exception e)
@@ -327,7 +333,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
 					offsetTags,
 					m_dataPointFactory.createDataPoint(now, 1));
-			m_publisher.post(failureEvent);
+			postEvent(failureEvent);
 
 			//Restart the client
 			stop();

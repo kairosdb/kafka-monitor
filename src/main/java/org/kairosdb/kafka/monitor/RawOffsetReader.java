@@ -33,6 +33,7 @@ public class RawOffsetReader extends TopicReader
 	private MonitorConfig m_monitorConfig;
 	private final int m_instanceId;
 	private final Properties m_consumerConfig;
+	private final Properties m_producerConfig;
 
 	private KafkaConsumer<Bytes, Bytes> m_consumer;
 	private KafkaProducer<String, Offset> m_producer;
@@ -42,25 +43,28 @@ public class RawOffsetReader extends TopicReader
 	public RawOffsetReader(@Named("DefaultConfig")Properties defaultConfig,
 			MonitorConfig monitorConfig, int instanceId)
 	{
-		m_consumerConfig = (Properties) defaultConfig.clone();
 		m_monitorConfig = monitorConfig;
 		m_instanceId = instanceId;
+
+		m_consumerConfig = (Properties) defaultConfig.clone();
+
+		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_raw_"+m_instanceId);
+		m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+		m_producerConfig = (Properties) m_consumerConfig.clone();
+
+		m_consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class);
+		m_consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class);
+
+		m_producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		m_producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Offset.OffsetSerializer.class);
 	}
 
 	@Override
 	protected void initializeConsumers()
 	{
-		m_consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class);
-		m_consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class);
-
-		m_consumerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-		m_consumerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Offset.OffsetSerializer.class);
-
-		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_raw_"+m_instanceId);
-		m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
 		m_consumer = new KafkaConsumer<>(m_consumerConfig);
-		m_producer = new KafkaProducer<>(m_consumerConfig);
+		m_producer = new KafkaProducer<>(m_producerConfig);
 
 		m_consumer.subscribe(Collections.singleton(OFFSET_TOPIC));
 		m_consumer.seekToBeginning(m_consumer.assignment());
@@ -119,7 +123,6 @@ public class RawOffsetReader extends TopicReader
 				//todo !value.getTopic().equals(OFFSET_TOPIC)
 				if (m_monitorConfig.isExcludeMonitorOffsets() && offset.getGroup().startsWith(m_monitorConfig.getApplicationId()))
 				{
-					System.out.println(offset.getGroup());
 					continue;
 				}
 
