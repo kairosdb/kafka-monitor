@@ -335,6 +335,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					m_dataPointFactory.createDataPoint(now, 1));
 			postEvent(failureEvent);
 
+			//todo this restart isn't working, system is wonky afterwords
 			//Restart the client
 			stop();
 			try

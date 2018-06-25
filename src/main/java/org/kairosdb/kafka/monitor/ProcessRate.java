@@ -38,7 +38,7 @@ public class ProcessRate
 		{
 			double rateSum = 0D;
 
-			//skip rates that are zero, situation may be that no data was received 
+			//skip rates that are zero, situation may be that no data was received
 			int usableRates = 0;
 			for (Double rate : m_processRates)
 			{
