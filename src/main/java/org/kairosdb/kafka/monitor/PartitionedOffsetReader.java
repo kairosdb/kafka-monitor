@@ -86,6 +86,7 @@ public class PartitionedOffsetReader extends TopicReader
 			ownedTopics.add(record.key());
 		}
 
+		//todo: maybe not send this every time
 		for (String ownedTopic : ownedTopics)
 		{
 			m_producer.send(new ProducerRecord<String, String>(

@@ -218,7 +218,26 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 			for (GroupStats groupStats : m_offsetsTracker.copyOfCurrentStats())
 			{
-				Map<Integer, Long> latestOffsets = getLatestTopicOffsets(groupStats.getTopic());
+				Map<Integer, Long> latestOffsets = null;
+
+				try
+				{
+					latestOffsets = getLatestTopicOffsets(groupStats.getTopic());
+				}
+				catch (Exception e)
+				{
+					logger.error("Error reading kafka offsets for topic: "+groupStats.getTopic(), e);
+
+					//Report failure metric
+					ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+							.putAll(m_monitorConfig.getAdditionalTags())
+							.put("host", m_clientId).build();
+
+					DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
+							offsetTags,
+							m_dataPointFactory.createDataPoint(now, 1));
+					postEvent(failureEvent);
+				}
 
 				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 						.putAll(m_monitorConfig.getAdditionalTags())
@@ -226,6 +245,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						.put("proxy_group", groupStats.getProxyGroup())
 						.put("topic", groupStats.getTopic()).build();
 
+				//Report consumer rate
 				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
@@ -244,17 +264,19 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 							.put("topic", groupStats.getTopic())
 							.put("partition", String.valueOf(offsetStat.getPartition())).build();
 
+					//Report offset age
 					DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
 							partitionTags,
 							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getCommitTime())));
 					postEvent(offsetAge);
 
-					Long latestOffset = latestOffsets.get(offsetStat.getPartition());
+					Long latestOffset = latestOffsets != null ? latestOffsets.get(offsetStat.getPartition()) : null;
 					if (latestOffset != null) //in case something goes bananas
 					{
 						long partitionLag = calculateDiff(latestOffset, offsetStat.getOffset());
 						groupLag += partitionLag;
 
+						//Report partition lag
 						DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
 								partitionTags,
 								m_dataPointFactory.createDataPoint(now, partitionLag));
@@ -262,12 +284,14 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					}
 				}
 
+				//Report group lag
 				DataPointEvent groupLagEvent = new DataPointEvent(m_monitorConfig.getGroupLagMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupLag));
 				postEvent(groupLagEvent);
 
 
+				//Report time to process lag
 				long secToProcess = 0;
 				if (groupStats.getCurrentRate() != 0.0)
 					secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
