@@ -42,7 +42,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private final Publisher<DataPointEvent> m_publisher;
 	private final LongDataPointFactory m_dataPointFactory;
 
-	private KafkaConsumer<Bytes, Bytes> m_offsetConsumer;
+	private KafkaConsumer<Bytes, Bytes> m_listTopicConsumer;
+	private KafkaConsumer<Bytes, Bytes> m_endOffsetsConsumer;
 	private final MonitorConfig m_monitorConfig;
 	private final String m_clientId;
 	private final ReentrantLock m_executeLock = new ReentrantLock();
@@ -55,6 +56,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private OwnerReader m_ownerReader;
 
 	private long m_runCounter = 0; //Counts how many times metrics have been reported, used to now when to update topics
+
+	private ClassLoader m_kafkaClassLoader; //used when loading kafka clients
 
 	@Inject
 	public OffsetListenerService(FilterEventBus eventBus,
@@ -76,8 +79,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	{
 		Stopwatch timer = Stopwatch.createStarted();
 
-		if (m_offsetConsumer != null)  //may not have been initialized when this is called the first time
-			m_offsetsTracker.updateTopics(m_offsetConsumer.listTopics());
+		if (m_listTopicConsumer != null)  //may not have been initialized when this is called the first time
+			m_offsetsTracker.updateTopics(m_listTopicConsumer.listTopics());
 
 		logger.info("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 	}
@@ -91,21 +94,34 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		//it with the one that loaded this class as Kairos loaded this plugin
 		//in a separate class loader.
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
-		Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
+		m_kafkaClassLoader = this.getClass().getClassLoader();
+		Thread.currentThread().setContextClassLoader(m_kafkaClassLoader);
 
 		m_rawOffsetReader = new RawOffsetReader(m_defaultConfig, m_monitorConfig, 0);
 		m_partitionedOffsetReader = new PartitionedOffsetReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
 		m_ownerReader = new OwnerReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
 
 
-		Properties offsetProperties = (Properties) m_defaultConfig.clone();
+		m_listTopicConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
 
-		m_offsetConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
+		m_endOffsetsConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
 
 		updateKafkaTopics();
 		//resetOffsets();
 
+		try
+		{
+			startConsumers();
+		}
+		finally
+		{
+			//put it back
+			Thread.currentThread().setContextClassLoader(contextClassLoader);
+		}
+	}
 
+	private void startConsumers()
+	{
 		try
 		{
 			m_rawOffsetReader.startReader();
@@ -120,11 +136,13 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			m_partitionedOffsetReader.stopReader();
 			m_ownerReader.stopReader();
 		}
-		finally
-		{
-			//put it back
-			Thread.currentThread().setContextClassLoader(contextClassLoader);
-		}
+	}
+
+	private void stopConsumers()
+	{
+		m_rawOffsetReader.stopReader();
+		m_partitionedOffsetReader.stopReader();
+		m_ownerReader.stopReader();
 	}
 
 
@@ -132,9 +150,9 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	@Override
 	public void stop()
 	{
-		m_rawOffsetReader.stopReader();
-		m_partitionedOffsetReader.stopReader();
-		m_ownerReader.stopReader();
+		stopConsumers();
+		m_listTopicConsumer.close();
+		m_endOffsetsConsumer.close();
 	}
 
 	@Override
@@ -180,11 +198,12 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			partitions.add(new TopicPartition(topic, partitionInfo.partition()));
 		}
 
-		Map<TopicPartition, Long> topicPartitionLongMap = m_offsetConsumer.endOffsets(partitions);
+		Map<TopicPartition, Long> topicPartitionLongMap = m_endOffsetsConsumer.endOffsets(partitions);
 
 		for (Map.Entry<TopicPartition, Long> entry : topicPartitionLongMap.entrySet())
 		{
-			ret.put(entry.getKey().partition(), entry.getValue());
+			if (entry.getValue() != null)
+				ret.put(entry.getKey().partition(), entry.getValue());
 		}
 
 		//todo change to debug statement
@@ -237,6 +256,27 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 							offsetTags,
 							m_dataPointFactory.createDataPoint(now, 1));
 					postEvent(failureEvent);
+					try
+					{
+						m_endOffsetsConsumer.close();
+					}
+					catch (Exception e1)
+					{
+						logger.error("Failed to close latest offset consumer", e1);
+					}
+
+					//Have to swap out the class loader when creating new consumers
+					ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+					Thread.currentThread().setContextClassLoader(m_kafkaClassLoader);
+					try
+					{
+						m_endOffsetsConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
+					}
+					finally
+					{
+						//put it back
+						Thread.currentThread().setContextClassLoader(contextClassLoader);
+					}
 				}
 
 				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
@@ -314,9 +354,13 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				long offsetCount = 0L;
 				for (Integer partition : currentOffsets.keySet())
 				{
-					offsetCount += calculateDiff(
-							currentOffsets.get(partition),
-							lastOffsets.get(partition));
+					//When things go wrong in the kafka cluster these can be null
+					if (partition != null && currentOffsets.get(partition) != null && lastOffsets.get(partition) != null)
+					{
+						offsetCount += calculateDiff(
+								currentOffsets.get(partition),
+								lastOffsets.get(partition));
+					}
 				}
 
 				ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
@@ -361,15 +405,8 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 			//todo this restart isn't working, system is wonky afterwords
 			//Restart the client
-			stop();
-			try
-			{
-				start();
-			}
-			catch (KairosDBException e1)
-			{
-				logger.error("Failed to start monitor service", e1);
-			}
+			stopConsumers();
+			startConsumers();
 		}
 		finally
 		{

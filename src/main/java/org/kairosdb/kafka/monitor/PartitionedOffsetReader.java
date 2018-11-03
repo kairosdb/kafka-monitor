@@ -44,6 +44,7 @@ public class PartitionedOffsetReader extends TopicReader
 		m_consumerConfig = (Properties) defaultConfig.clone();
 
 		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_partitioned_"+m_instanceId); //cannot have the same app id
+		m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
 		m_producerConfig = (Properties) m_consumerConfig.clone();
 
@@ -62,7 +63,10 @@ public class PartitionedOffsetReader extends TopicReader
 		m_producer = new KafkaProducer<>(m_producerConfig);
 
 		m_consumer.subscribe(Collections.singleton(m_monitorConfig.getOffsetsTopicName()));
-		m_consumer.seekToEnd(m_consumer.assignment());
+		m_consumer.seekToBeginning(m_consumer.assignment());
+
+
+		//May need to get latest offsets and do catchup
 	}
 
 	@Override

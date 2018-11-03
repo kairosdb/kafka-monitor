@@ -1,4 +1,4 @@
-# kafka-monitor
+# kafka-topic-monitor
 Plugin that reads and reports kafka topic lag
 
 ### Metrics that this plugin will report

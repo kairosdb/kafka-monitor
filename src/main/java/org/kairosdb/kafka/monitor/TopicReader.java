@@ -32,6 +32,7 @@ public abstract class TopicReader implements Runnable
 
 		try
 		{
+			logger.info("wait for read to finish");
 			m_finishLatch.await(30, TimeUnit.SECONDS);
 		}
 		catch (InterruptedException e)
@@ -42,6 +43,7 @@ public abstract class TopicReader implements Runnable
 
 		try
 		{
+			logger.info("calling stop consumers");
 			stopConsumers();
 		}
 		catch (Exception e)

@@ -49,7 +49,8 @@ public class RawOffsetReader extends TopicReader
 		m_consumerConfig = (Properties) defaultConfig.clone();
 
 		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_raw_"+m_instanceId);
-		m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+		//m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+		m_consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
 
 		m_producerConfig = (Properties) m_consumerConfig.clone();
 
@@ -67,7 +68,7 @@ public class RawOffsetReader extends TopicReader
 		m_producer = new KafkaProducer<>(m_producerConfig);
 
 		m_consumer.subscribe(Collections.singleton(OFFSET_TOPIC));
-		m_consumer.seekToBeginning(m_consumer.assignment());
+		//m_consumer.seekToBeginning(m_consumer.assignment());
 	}
 
 	@Override
