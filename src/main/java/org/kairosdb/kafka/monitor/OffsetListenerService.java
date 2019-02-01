@@ -214,6 +214,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 
 	private void postEvent(DataPointEvent event)
 	{
+
 		//Metrics are kinda wonky the first time through so we skip those.
 		if (m_runCounter != 0)
 			m_publisher.post(event);
