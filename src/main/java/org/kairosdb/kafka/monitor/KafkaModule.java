@@ -46,11 +46,11 @@ public class KafkaModule  extends AbstractModule
 		defaultConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 		defaultConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
 		defaultConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serdes.Bytes().deserializer().getClass().getName());
-		defaultConfig.put("exclude.internal.topics", "false");
+		defaultConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false");
 		defaultConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
 		defaultConfig.put(ProducerConfig.RETRIES_CONFIG, 10);
 		defaultConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30*1000);
-		//If we never commit offsets we will always get the latest or earliest depending on topic
+		//If we never commit offsets we will always get the latest or earliest depending on topic and that's ok
 		defaultConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
 		return defaultConfig;
