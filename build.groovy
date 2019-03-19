@@ -28,14 +28,11 @@ saw.setProperty(Tablesaw.PROP_MULTI_THREAD_OUTPUT, Tablesaw.PROP_VALUE_ON)
 
 programName = "kairos-kafka-monitor"
 //Do not use '-' in version string, it breaks rpm uninstall.
-version = "1.3.0"
-release = saw.getProperty("KAIROS_RELEASE_NUMBER", "0.1beta") //package release number
-summary = "KairosDB"
+version = "1.0"
+release = saw.getProperty("KAIROS_RELEASE_NUMBER", "1") //package release number
+summary = "KairosDB Kafka Topic Monitor Plugin"
 description = """\
-KairosDB is a time series database that stores numeric values along
-with key/value tags to a nosql data store.  Currently supported
-backends are Cassandra and H2.  An H2 implementation is provided
-for development work.
+This plugin monitors kafka topic lag for individual consumers and reports metrics
 """
 
 
