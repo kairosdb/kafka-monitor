@@ -28,7 +28,7 @@ saw.setProperty(Tablesaw.PROP_MULTI_THREAD_OUTPUT, Tablesaw.PROP_VALUE_ON)
 
 programName = "kairos-kafka-monitor"
 //Do not use '-' in version string, it breaks rpm uninstall.
-version = "1.0"
+version = "1.1"
 release = saw.getProperty("KAIROS_RELEASE_NUMBER", "1") //package release number
 summary = "KairosDB Kafka Topic Monitor Plugin"
 description = """\
