@@ -60,7 +60,7 @@ public class MonitorConfig
 	private String m_groupLagMetric = "group_lag";
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.metric.group_lag")
+	@Named("kairosdb.kafka_monitor.metric.group_time_to_process")
 	private String m_groupTimeToProcessMetric = "group_time_to_process";
 
 	@Inject(optional = true)

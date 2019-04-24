@@ -129,6 +129,7 @@ public class Offset
 	{
 		Offset offset = new Offset();
 
+		//Read key
 		ByteBuffer bb = ByteBuffer.wrap(key);
 		int version = bb.getShort();
 
@@ -139,10 +140,14 @@ public class Offset
 			offset.m_partition = bb.getInt();
 		}
 
+		//Read value
 		bb = ByteBuffer.wrap(value);
 		version = bb.getShort();
 
 		offset.m_offset = bb.getLong();
+
+		if (version == 3)
+			bb.getInt(); //leader_epoch
 
 		//We read the metadata but we don't do anything with it.
 		readString(bb, "NO_METADATA");

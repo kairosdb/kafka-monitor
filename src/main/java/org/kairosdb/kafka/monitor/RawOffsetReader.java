@@ -84,7 +84,7 @@ public class RawOffsetReader extends TopicReader
 		if (key != null && value != null)
 		{
 			//This code only handles versions 0 and 1 of the offsets
-			//version 2 appears to mean something else
+			//version 2 group membership information
 			ByteBuffer bbkey = ByteBuffer.wrap(key.get());
 			if (bbkey.getShort() > 1)
 			{
@@ -94,7 +94,7 @@ public class RawOffsetReader extends TopicReader
 			}
 
 			ByteBuffer bbvalue = ByteBuffer.wrap(value.get());
-			if (bbvalue.getShort() > 1)
+			if (bbvalue.getShort() > 3) //handles up to version 3
 			{
 				logger.debug("Unknown value: {}", value);
 				return false;
