@@ -1,2 +1,2 @@
-mvn clean package; mv target/kafka-monitor-1.0-SNAPSHOT.jar target/dependency/
+mvn clean package; mv target/*.jar target/dependency/
 

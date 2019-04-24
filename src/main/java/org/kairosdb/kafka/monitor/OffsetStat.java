@@ -27,9 +27,13 @@ public class OffsetStat
 	public long updateOffset(long offset, long commitTime, long expireTime)
 	{
 		long diff = calculateDiff(offset, m_offset);
-		m_offset = offset;
-		m_commitTime = commitTime;
-		m_expireTime = expireTime;
+
+		if (diff != 0)
+		{
+			m_offset = offset;
+			m_commitTime = commitTime;
+			m_expireTime = expireTime;
+		}
 
 		return diff;
 	}
