@@ -41,7 +41,8 @@ saw.includeDefinitionFile("definitions.xml")
 
 
 rpmDir = "build/rpm"
-new DirectoryRule("build")
+buildDirRule = new DirectoryRule("build")
+new DirectoryRule("target")
 rpmDirRule = new DirectoryRule(rpmDir)
 
 //Read pom file to get version out
@@ -61,29 +62,22 @@ def doMavenBuild(Rule rule)
 //Build zip deployable application
 rpmFile = "$programName-$version-${release}.rpm"
 srcRpmFile = "$programName-$version-${release}.src.rpm"
-ivyFileSet = new SimpleFileSet()
 
 
 libFileSets = [
-		new RegExFileSet("build/jar", ".*\\.jar"),
-		new RegExFileSet("lib", ".*\\.jar"),
-		ivyFileSet
+		new RegExFileSet("target", ".*\\.jar"),
+		new RegExFileSet("target/dependency", ".*\\.jar")
 ]
 
 scriptsFileSet = new RegExFileSet("src/scripts", ".*").addExcludeFile("kairosdb-env.sh")
 webrootFileSet = new RegExFileSet("webroot", ".*").recurse()
 
-zipLibDir = "$programName/lib"
-zipBinDir = "$programName/bin"
+zipLibDir = "$programName/lib/kafka-monitor"
 zipConfDir = "$programName/conf"
-zipConfLoggingDir = "$zipConfDir/logging"
-zipWebRootDir = "$programName/webroot"
 tarRule = new TarRule("build/${programName}-${version}-${release}.tar")
 		.addDepend(mvnRule)
-		.addFileSetTo(zipBinDir, scriptsFileSet)
-		.addFileSetTo(zipWebRootDir, webrootFileSet)
-		.addFileTo(zipConfDir, "src/main/resources", "kairosdb.conf")
-		.addFileTo(zipConfLoggingDir, "src/main/resources", "logback.xml")
+		.addDepend(buildDirRule)
+		.addFileTo(zipConfDir, "src/main/resources", "kafka-monitor.properties")
 		.setFilePermission(".*\\.sh", 0755)
 
 for (AbstractFileSet fs in libFileSets)
