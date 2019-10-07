@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Named;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -110,9 +111,9 @@ public class RawOffsetReader extends TopicReader
 	@Override
 	protected void readTopic()
 	{
-		ConsumerRecords<Bytes, Bytes> records = m_consumer.poll(100);
+		ConsumerRecords<Bytes, Bytes> records = m_consumer.poll(Duration.ofMillis(100));
 
-		long now = System.currentTimeMillis();
+		long expireTime = System.currentTimeMillis() - (m_monitorConfig.getTrackerRetentionMinutes() * 60 * 1000);
 
 		for (ConsumerRecord<Bytes, Bytes> record : records)
 		{
@@ -127,8 +128,10 @@ public class RawOffsetReader extends TopicReader
 					continue;
 				}
 
+				//System.out.println(offset.getTopic());
 				//Filter out expired offsets.  We can still read them long after they have expired
-				if (offset.getExpireTime() > now)
+				//System.out.println(offset.getCommitTime() + " " + expireTime);
+				if (offset.getCommitTime() > expireTime)
 					m_producer.send(new ProducerRecord<String, Offset>(m_monitorConfig.getOffsetsTopicName(), offset.getTopic(), offset));
 			}
 		}

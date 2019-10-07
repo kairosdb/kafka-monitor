@@ -9,7 +9,7 @@ public class TestOffset
 	@Test
 	public void testSerde()
 	{
-		Offset offset = new Offset("group", "topic", 43, 12354L, 12L, 30L);
+		Offset offset = new Offset("group", "topic", 43, 12354L, 12L);
 
 		Offset.OffsetSerde serde = new Offset.OffsetSerde();
 

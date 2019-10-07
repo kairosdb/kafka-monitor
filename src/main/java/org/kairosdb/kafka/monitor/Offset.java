@@ -1,9 +1,7 @@
 package org.kairosdb.kafka.monitor;
 
-import io.netty.buffer.ByteBuf;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
@@ -19,7 +17,6 @@ public class Offset
 	private int m_partition;
 	private long m_offset;
 	private long m_commitTime;
-	private long m_expireTime;
 
 	public Offset()
 	{
@@ -28,17 +25,15 @@ public class Offset
 		m_partition = -1;
 		m_offset = -1;
 		m_commitTime = -1;
-		m_expireTime = -1;
 	}
 
-	public Offset(String group, String topic, int partition, long offset, long commitTime, long expireTime)
+	public Offset(String group, String topic, int partition, long offset, long commitTime)
 	{
 		m_group = group;
 		m_topic = topic;
 		m_partition = partition;
 		m_offset = offset;
 		m_commitTime = commitTime;
-		m_expireTime = expireTime;
 	}
 
 	public String getGroup()
@@ -66,10 +61,6 @@ public class Offset
 		return m_commitTime;
 	}
 
-	public long getExpireTime()
-	{
-		return m_expireTime;
-	}
 
 	private static String readString(ByteBuffer bb)
 	{
@@ -100,7 +91,6 @@ public class Offset
 		return m_partition == offset.m_partition &&
 				m_offset == offset.m_offset &&
 				m_commitTime == offset.m_commitTime &&
-				m_expireTime == offset.m_expireTime &&
 				Objects.equals(m_group, offset.m_group) &&
 				Objects.equals(m_topic, offset.m_topic);
 	}
@@ -109,7 +99,7 @@ public class Offset
 	public int hashCode()
 	{
 
-		return Objects.hash(m_group, m_topic, m_partition, m_offset, m_commitTime, m_expireTime);
+		return Objects.hash(m_group, m_topic, m_partition, m_offset, m_commitTime);
 	}
 
 	@Override
@@ -121,7 +111,6 @@ public class Offset
 				", m_partition=" + m_partition +
 				", m_offset=" + m_offset +
 				", m_commitTime=" + m_commitTime +
-				", m_expireTime=" + m_expireTime +
 				'}';
 	}
 
@@ -153,9 +142,6 @@ public class Offset
 		readString(bb, "NO_METADATA");
 
 		offset.m_commitTime =  bb.getLong();
-
-		if (version == 1)
-			offset.m_expireTime = bb.getLong();
 
 		return offset;
 	}
@@ -206,7 +192,6 @@ public class Offset
 			bb.putInt(data.m_partition);
 			bb.putLong(data.m_offset);
 			bb.putLong(data.m_commitTime);
-			bb.putLong(data.m_expireTime);
 
 			return bb.array();
 		}
@@ -236,7 +221,6 @@ public class Offset
 				offset.m_partition = bb.getInt();
 				offset.m_offset = bb.getLong();
 				offset.m_commitTime = bb.getLong();
-				offset.m_expireTime = bb.getLong();
 			}
 
 			return offset;

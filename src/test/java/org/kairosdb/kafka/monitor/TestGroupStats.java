@@ -28,13 +28,13 @@ public class TestGroupStats
 	{
 		Stopwatch rateTimer = getStopwatch(10);
 
-		GroupStats gs = new GroupStats("foo", "topic", 10);
+		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000, 2000);
-		gs.offsetChange(2, 5, 1000, 2000);
-		gs.offsetChange(3, 5, 1000, 2000);
-		gs.offsetChange(4, 5, 1000, 2000);
+		gs.offsetChange(1, 5, 1000);
+		gs.offsetChange(2, 5, 1000);
+		gs.offsetChange(3, 5, 1000);
+		gs.offsetChange(4, 5, 1000);
 
 		gs = gs.copyAndReset();
 
@@ -46,13 +46,13 @@ public class TestGroupStats
 	{
 		Stopwatch rateTimer = getStopwatch(1);
 
-		GroupStats gs = new GroupStats("foo", "topic", 10);
+		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000, 2000);
-		gs.offsetChange(2, 5, 1000, 2000);
-		gs.offsetChange(1, 15, 2000, 2000);
-		gs.offsetChange(2, 15, 2000, 2000);
+		gs.offsetChange(1, 5, 1000);
+		gs.offsetChange(2, 5, 1000);
+		gs.offsetChange(1, 15, 2000);
+		gs.offsetChange(2, 15, 2000);
 
 		gs = gs.copyAndReset();
 
@@ -63,13 +63,13 @@ public class TestGroupStats
 	public void test_offsetChangeWithNoTimeChange()
 	{
 		Stopwatch rateTimer = getStopwatch(1);
-		GroupStats gs = new GroupStats("foo", "topic", 10);
+		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
 		gs.setRateTimer(rateTimer);
 
-		gs.offsetChange(1, 5, 1000, 2000);
-		gs.offsetChange(2, 5, 1000, 2000);
-		gs.offsetChange(1, 15, 1000, 2000);
-		gs.offsetChange(2, 15, 1000, 2000);
+		gs.offsetChange(1, 5, 1000);
+		gs.offsetChange(2, 5, 1000);
+		gs.offsetChange(1, 15, 1000);
+		gs.offsetChange(2, 15, 1000);
 
 		gs = gs.copyAndReset();
 
@@ -79,7 +79,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_noSplit()
 	{
-		GroupStats gs = new GroupStats("MyAwesomeGroup", "topic", 10);
+		GroupStats gs = new GroupStats("MyAwesomeGroup", "topic", 10, 1);
 
 		assertEquals("MyAwesomeGroup", gs.getProxyGroup());
 	}
@@ -87,7 +87,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_withGroup()
 	{
-		GroupStats gs = new GroupStats("MyAwesome__Group", "topic", 10);
+		GroupStats gs = new GroupStats("MyAwesome__Group", "topic", 10, 1);
 
 		assertEquals("MyAwesome", gs.getProxyGroup());
 	}
@@ -95,7 +95,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_multipleSplits()
 	{
-		GroupStats gs = new GroupStats("My__Awesome__Group", "topic", 10);
+		GroupStats gs = new GroupStats("My__Awesome__Group", "topic", 10, 1);
 
 		assertEquals("My__Awesome", gs.getProxyGroup());
 	}

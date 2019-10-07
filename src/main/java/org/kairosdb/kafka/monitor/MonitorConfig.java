@@ -79,6 +79,10 @@ public class MonitorConfig
 	@Named("kairosdb.kafka_monitor.rate_tracker_size")
 	private int m_rateTrackerSize = 10;
 
+	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor.tracker_retention_minutes")
+	private long m_trackerRetentionMinutes = 1_440; //default to 24hrs
+
 	private Map<String, String> m_additionalTags = Collections.EMPTY_MAP;
 
 	@Inject(optional = true)
@@ -182,5 +186,10 @@ public class MonitorConfig
 	public int getRateTrackerSize()
 	{
 		return m_rateTrackerSize;
+	}
+
+	public long getTrackerRetentionMinutes()
+	{
+		return m_trackerRetentionMinutes;
 	}
 }

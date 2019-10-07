@@ -18,20 +18,22 @@ public class GroupStats
 	private final Object m_offsetLock = new Object();
 	private final ProcessRate m_processRate;
 	private Stopwatch m_rateTimer;
+	private final long m_trackerRetention;  //Minutes to track offsets
 
 
-	public GroupStats(String groupName, String topic, int trackerCount)
+	public GroupStats(String groupName, String topic, int trackerCount, long trackerRetention)
 	{
-		this(groupName, topic, new ProcessRate(trackerCount));
+		this(groupName, topic, new ProcessRate(trackerCount), trackerRetention);
 	}
 
-	private GroupStats(String groupName, String topic, ProcessRate processRate)
+	private GroupStats(String groupName, String topic, ProcessRate processRate, long trackerRetention)
 	{
 		m_groupName = groupName;
 		m_topic = topic;
 		m_partitionStats = new ConcurrentHashMap<>();
 		m_processRate = processRate;
 		m_rateTimer = Stopwatch.createStarted();
+		m_trackerRetention = trackerRetention;
 
 		if (m_groupName.contains("__"))
 		{
@@ -54,8 +56,8 @@ public class GroupStats
 	 */
 	public GroupStats copyAndReset()
 	{
-		long now = System.currentTimeMillis();
-		GroupStats copy = new GroupStats(m_groupName, m_topic, m_processRate);
+		long expireTime = System.currentTimeMillis() - (m_trackerRetention * 60 * 1000);
+		GroupStats copy = new GroupStats(m_groupName, m_topic, m_processRate, m_trackerRetention);
 
 		synchronized (m_offsetLock)
 		{
@@ -69,7 +71,7 @@ public class GroupStats
 
 			for (Map.Entry<Integer, OffsetStat> offset : m_partitionStats.entrySet())
 			{
-				if (now < offset.getValue().getExpireTime())
+				if (expireTime < offset.getValue().getCommitTime())
 					copy.m_partitionStats.put(offset.getKey(), offset.getValue().copy());
 				else
 					m_partitionStats.remove(offset.getKey());  //Remove entry if expired so we don't track it anymore
@@ -103,7 +105,7 @@ public class GroupStats
 		return m_processRate.getCurrentRate();
 	}
 
-	public void offsetChange(int partition, long offset, long commitTime, long expireTime)
+	public void offsetChange(int partition, long offset, long commitTime)
 	{
 		synchronized (m_offsetLock)
 		{
@@ -111,7 +113,7 @@ public class GroupStats
 
 			if (offsetStat == null)
 			{
-				m_partitionStats.put(partition, new OffsetStat(partition, offset, commitTime, expireTime));
+				m_partitionStats.put(partition, new OffsetStat(partition, offset, commitTime));
 			}
 			else
 			{
@@ -120,7 +122,7 @@ public class GroupStats
 				//make sure the time really changed in the right direction
 				if (time > 0)
 				{
-					m_consumeCount += offsetStat.updateOffset(offset, commitTime, expireTime);
+					m_consumeCount += offsetStat.updateOffset(offset, commitTime);
 				}
 			}
 		}

@@ -6,7 +6,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.common.PartitionInfo;
-import org.eclipse.jetty.util.ConcurrentHashSet;
 
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class OffsetsTracker
 {
 
-	private Set<String> m_topics = new ConcurrentHashSet<>();
+	private final long m_trackerRetentionMinutes;
+	private Set<String> m_topics = ConcurrentHashMap.newKeySet();
 	private Map<Pair<String, String>, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
 
 	private Map<String, List<PartitionInfo>> m_kafkaTopics = new HashMap<>();
@@ -28,6 +28,7 @@ public class OffsetsTracker
 	public OffsetsTracker(MonitorConfig config)
 	{
 		m_rateTrackerSize = config.getRateTrackerSize();
+		m_trackerRetentionMinutes = config.getTrackerRetentionMinutes();
 	}
 
 	public void removeTrackedTopic(String topic)
@@ -50,11 +51,11 @@ public class OffsetsTracker
 		if (groupStats == null)
 		{
 			groupStats = new GroupStats(offset.getGroup(), offset.getTopic(),
-					m_rateTrackerSize);
+					m_rateTrackerSize, m_trackerRetentionMinutes);
 			m_groupStatsMap.put(groupKey, groupStats);
 		}
 
-		groupStats.offsetChange(offset.getPartition(), offset.getOffset(), offset.getCommitTime(), offset.getExpireTime());
+		groupStats.offsetChange(offset.getPartition(), offset.getOffset(), offset.getCommitTime());
 	}
 
 	public List<GroupStats> copyOfCurrentStats()

@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Named;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Properties;
@@ -80,13 +81,14 @@ public class PartitionedOffsetReader extends TopicReader
 	@Override
 	protected void readTopic()
 	{
-		ConsumerRecords<String, Offset> records = m_consumer.poll(100);
+		ConsumerRecords<String, Offset> records = m_consumer.poll(Duration.ofMillis(100));
 		Set<String> ownedTopics = new HashSet<>();
 
 		for (ConsumerRecord<String, Offset> record : records)
 		{
 			m_offsetTracker.updateOffset(record.value());
 
+			//System.out.println("Read "+record.key());
 			ownedTopics.add(record.key());
 		}
 

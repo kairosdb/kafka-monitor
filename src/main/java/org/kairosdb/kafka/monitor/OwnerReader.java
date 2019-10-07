@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -52,7 +53,7 @@ public class OwnerReader extends TopicReader
 	@Override
 	protected void readTopic()
 	{
-		ConsumerRecords<String, String> records = m_consumer.poll(100);
+		ConsumerRecords<String, String> records = m_consumer.poll(Duration.ofMillis(100));
 
 		for (ConsumerRecord<String, String> record : records)
 		{
