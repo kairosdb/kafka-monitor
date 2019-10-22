@@ -1,14 +1,13 @@
 package org.kairosdb.kafka.monitor;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.kairosdb.kafka.monitor.util.Stopwatch;
 
-import java.security.acl.Group;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
-import static junit.framework.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
 public class TestGroupStats

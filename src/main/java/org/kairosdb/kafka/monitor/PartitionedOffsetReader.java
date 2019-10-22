@@ -10,6 +10,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +24,7 @@ import java.util.Set;
 public class PartitionedOffsetReader extends TopicReader
 {
 	private static final Logger logger = LoggerFactory.getLogger(PartitionedOffsetReader.class);
+	private static final MonitorStats stats = MetricSourceManager.getSource(MonitorStats.class);
 
 	private final OffsetsTracker m_offsetTracker;
 	private final Properties m_consumerConfig;
@@ -82,6 +84,9 @@ public class PartitionedOffsetReader extends TopicReader
 	protected void readTopic()
 	{
 		ConsumerRecords<String, Offset> records = m_consumer.poll(Duration.ofMillis(100));
+
+		stats.partitionedOffsetsRead().put(records.count());
+
 		Set<String> ownedTopics = new HashSet<>();
 
 		for (ConsumerRecord<String, Offset> record : records)

@@ -9,16 +9,10 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
-import org.kairosdb.core.KairosDBService;
-import org.kairosdb.core.datapoints.LongDataPointFactory;
-import org.kairosdb.core.exception.KairosDBException;
-import org.kairosdb.core.scheduler.KairosDBJob;
-import org.kairosdb.eventbus.FilterEventBus;
-import org.kairosdb.eventbus.Publisher;
-import org.kairosdb.events.DataPointEvent;
+import org.kairosdb.metrics4j.MetricSourceManager;
+import org.quartz.InterruptableJob;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
-import org.quartz.Trigger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,18 +23,14 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.kairosdb.kafka.monitor.OffsetStat.calculateDiff;
-import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
-import static org.quartz.TriggerBuilder.newTrigger;
 
 //todo Add configuration to expire tracked offsets
 
-public class OffsetListenerService implements KairosDBService, KairosDBJob
+public class OffsetListenerService implements InterruptableJob
 {
 	private static final Logger logger = LoggerFactory.getLogger(OffsetListenerService.class);
+	private static final ConsumerStats consumerStats = MetricSourceManager.getSource(ConsumerStats.class);
 	public static final String OFFSET_TOPIC = "__consumer_offsets";
-
-	private final Publisher<DataPointEvent> m_publisher;
-	private final LongDataPointFactory m_dataPointFactory;
 
 	private KafkaConsumer<Bytes, Bytes> m_listTopicConsumer;
 	private KafkaConsumer<Bytes, Bytes> m_endOffsetsConsumer;
@@ -60,13 +50,10 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	private ClassLoader m_kafkaClassLoader; //used when loading kafka clients
 
 	@Inject
-	public OffsetListenerService(FilterEventBus eventBus,
-			LongDataPointFactory dataPointFactory,
+	public OffsetListenerService(
 			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker,
 			@Named("DefaultConfig")Properties defaultConfig)
 	{
-		m_publisher = checkNotNull(eventBus).createPublisher(DataPointEvent.class);
-		m_dataPointFactory = dataPointFactory;
 		m_monitorConfig = monitorConfig;
 		m_clientId = m_monitorConfig.getClientId();
 
@@ -86,8 +73,7 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	}
 
 
-	@Override
-	public void start() throws KairosDBException
+	public void start()
 	{
 
 		//Kafka uses the thread context loader to load stuff.  We have to swap
@@ -146,8 +132,6 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 	}
 
 
-
-	@Override
 	public void stop()
 	{
 		stopConsumers();
@@ -155,15 +139,6 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		m_endOffsetsConsumer.close();
 	}
 
-	@Override
-	public Trigger getTrigger()
-	{
-		return (newTrigger()
-				.withIdentity(this.getClass().getSimpleName())
-				.withSchedule(simpleSchedule()
-						.withIntervalInMinutes(1).repeatForever())
-				.build());
-	}
 
 	@Override
 	public void interrupt() { }
@@ -212,13 +187,13 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 		return ret;
 	}
 
-	private void postEvent(DataPointEvent event)
+	/*private void postEvent(DataPointEvent event)
 	{
 
 		//Metrics are kinda wonky the first time through so we skip those.
 		if (m_runCounter != 0)
 			m_publisher.post(event);
-	}
+	}*/
 
 
 	@Override
@@ -249,14 +224,15 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					logger.error("Error reading kafka offsets for topic: "+groupStats.getTopic(), e);
 
 					//Report failure metric
-					ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+					/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 							.putAll(m_monitorConfig.getAdditionalTags())
-							.put("host", m_clientId).build();
+							.put("host", m_clientId).build();*/
 
-					DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
+					consumerStats.gatherFailure().put(1);
+					/*DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
 							offsetTags,
 							m_dataPointFactory.createDataPoint(now, 1));
-					postEvent(failureEvent);
+					postEvent(failureEvent);*/
 					try
 					{
 						m_endOffsetsConsumer.close();
@@ -280,17 +256,18 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					}
 				}
 
-				ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+				/*ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 						.putAll(m_monitorConfig.getAdditionalTags())
 						.put("group", groupStats.getGroupName())
 						.put("proxy_group", groupStats.getProxyGroup())
-						.put("topic", groupStats.getTopic()).build();
+						.put("topic", groupStats.getTopic()).build();*/
 
 				//Report consumer rate
-				DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
+				consumerStats.consumeCount(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(groupStats.getConsumeCount());
+				/*DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
-				postEvent(event);
+				postEvent(event);*/
 
 				long groupLag = 0;
 
@@ -298,18 +275,22 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				{
 					//todo document that offset age may be lost when adding new nodes to the monitor group
 
-					ImmutableSortedMap<String, String> partitionTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+					/*ImmutableSortedMap<String, String> partitionTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 							.putAll(m_monitorConfig.getAdditionalTags())
 							.put("group", groupStats.getGroupName())
 							.put("proxy_group", groupStats.getProxyGroup())
 							.put("topic", groupStats.getTopic())
-							.put("partition", String.valueOf(offsetStat.getPartition())).build();
+							.put("partition", String.valueOf(offsetStat.getPartition())).build();*/
 
 					//Report offset age
-					DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
+					//System.out.println("Reporting offset age for "+groupStats.getGroupName());
+					consumerStats.offsetAge(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic(),
+							String.valueOf(offsetStat.getPartition())).put(now - offsetStat.getCommitTime());
+
+					/*DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
 							partitionTags,
 							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getCommitTime())));
-					postEvent(offsetAge);
+					postEvent(offsetAge);*/
 
 					Long latestOffset = latestOffsets != null ? latestOffsets.get(offsetStat.getPartition()) : null;
 					if (latestOffset != null) //in case something goes bananas
@@ -318,18 +299,21 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 						groupLag += partitionLag;
 
 						//Report partition lag
-						DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
+						consumerStats.partitionLag(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic(),
+								String.valueOf(offsetStat.getPartition())).put(partitionLag);
+						/*DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
 								partitionTags,
 								m_dataPointFactory.createDataPoint(now, partitionLag));
-						postEvent(partitionLagEvent);
+						postEvent(partitionLagEvent);*/
 					}
 				}
 
 				//Report group lag
-				DataPointEvent groupLagEvent = new DataPointEvent(m_monitorConfig.getGroupLagMetric(),
+				consumerStats.groupLag(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(groupLag);
+				/*DataPointEvent groupLagEvent = new DataPointEvent(m_monitorConfig.getGroupLagMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, groupLag));
-				postEvent(groupLagEvent);
+				postEvent(groupLagEvent);*/
 
 
 				//Report time to process lag
@@ -337,10 +321,11 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 				if (groupStats.getCurrentRate() != 0.0)
 					secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
 
-				DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
+				consumerStats.groupTimeToProcess(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(secToProcess);
+				/*DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
 						groupTags,
 						m_dataPointFactory.createDataPoint(now, secToProcess));
-				postEvent(groupMsToProcessEvent);
+				postEvent(groupMsToProcessEvent);*/
 			}
 
 
@@ -364,14 +349,15 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 					}
 				}
 
-				ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+				/*ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 						.putAll(m_monitorConfig.getAdditionalTags())
-						.put("topic", topic).build();
+						.put("topic", topic).build();*/
 
-				DataPointEvent producerRateEvent = new DataPointEvent(m_monitorConfig.getProducerRateMetric(),
+				consumerStats.produceCount(topic).put(offsetCount);
+				/*DataPointEvent producerRateEvent = new DataPointEvent(m_monitorConfig.getProducerRateMetric(),
 						producerTags,
 						m_dataPointFactory.createDataPoint(now, offsetCount));
-				postEvent(producerRateEvent);
+				postEvent(producerRateEvent);*/
 			}
 
 
@@ -380,14 +366,15 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			m_currentTopicOffsets = new HashMap<>();
 
 			//Report how long it took to gather/report offsets
-			ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+			/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 					.putAll(m_monitorConfig.getAdditionalTags())
-					.put("host", m_clientId).build();
+					.put("host", m_clientId).build();*/
 
-			DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTimeMetric(),
+			consumerStats.offsetGatherTime().put(timer.stop().elapsed(TimeUnit.MILLISECONDS));
+			/*DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTimeMetric(),
 					offsetTags,
 					m_dataPointFactory.createDataPoint(now, timer.stop().elapsed(TimeUnit.MILLISECONDS)));
-			postEvent(offsetTimeEvent);
+			postEvent(offsetTimeEvent);*/
 
 		}
 		catch (Exception e)
@@ -395,14 +382,15 @@ public class OffsetListenerService implements KairosDBService, KairosDBJob
 			logger.error("Error processing kafka stats", e);
 
 			//Report failure metric
-			ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
+			/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
 					.putAll(m_monitorConfig.getAdditionalTags())
-					.put("host", m_clientId).build();
+					.put("host", m_clientId).build();*/
 
-			DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
+			consumerStats.gatherFailure().put(1);
+			/*DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
 					offsetTags,
 					m_dataPointFactory.createDataPoint(now, 1));
-			postEvent(failureEvent);
+			postEvent(failureEvent);*/
 
 			//todo this restart isn't working, system is wonky afterwords
 			//Restart the client

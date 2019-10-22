@@ -11,6 +11,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import static org.kairosdb.kafka.monitor.OffsetListenerService.OFFSET_TOPIC;
 public class RawOffsetReader extends TopicReader
 {
 	private static final Logger logger = LoggerFactory.getLogger(RawOffsetReader.class);
+	private static final MonitorStats stats = MetricSourceManager.getSource(MonitorStats.class);
 
 	private MonitorConfig m_monitorConfig;
 	private final int m_instanceId;
@@ -112,6 +114,8 @@ public class RawOffsetReader extends TopicReader
 	protected void readTopic()
 	{
 		ConsumerRecords<Bytes, Bytes> records = m_consumer.poll(Duration.ofMillis(100));
+
+		stats.rawOffsetsRead().put(records.count());
 
 		long expireTime = System.currentTimeMillis() - (m_monitorConfig.getTrackerRetentionMinutes() * 60 * 1000);
 
