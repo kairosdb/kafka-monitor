@@ -3,6 +3,8 @@ package org.kairosdb.kafka.monitor;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 
+import java.time.Duration;
+
 
 public class MonitorConfig
 {
@@ -38,12 +40,21 @@ public class MonitorConfig
 	@Named("kairosdb.kafka_monitor.tracker_retention_minutes")
 	private long m_trackerRetentionMinutes = 1_440; //default to 24hrs
 
+	@Inject(optional = true)
+	@Named("kairosdb.kafka_monitor_stale_partition_age")
+	private Duration m_stalePartitionAge;
+
 	@Inject
 	@Named("HOSTNAME")
 	private String m_hostName = "localhost";
 
 	public MonitorConfig()
 	{
+	}
+
+	public Duration getStalePartitionAge()
+	{
+		return m_stalePartitionAge;
 	}
 
 	public String getApplicationId()

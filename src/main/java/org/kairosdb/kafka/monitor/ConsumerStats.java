@@ -13,4 +13,5 @@ public interface ConsumerStats
 	LongCollector groupTimeToProcess(@Key("group") String group, @Key("proxy_group") String proxyGroup, @Key("topic") String topic);
 	LongCollector produceCount(@Key("topic") String topic);
 	LongCollector offsetGatherTime();
+	LongCollector stalePartitions(@Key("group") String group, @Key("proxy_group") String proxyGroup, @Key("topic") String topic);
 }
