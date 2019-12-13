@@ -1,5 +1,9 @@
 package org.kairosdb.kafka.monitor;
 
+import com.sun.scenario.effect.impl.sw.sse.SSEBlend_SRC_OUTPeer;
+import javafx.scene.paint.Stop;
+import org.apache.commons.lang3.time.StopWatch;
+import org.kairosdb.kafka.monitor.util.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,21 +16,24 @@ public abstract class TopicReader implements Runnable
 	private static final Logger logger = LoggerFactory.getLogger(TopicReader.class);
 	private volatile boolean m_keepRunning = true;
 	private CountDownLatch m_finishLatch;
+	private final Controller m_controller;
 
-
-	protected abstract void initializeConsumers();
-
-	public void startReader()
+	protected TopicReader()
 	{
+		m_controller = new Controller();
+	}
+
+	private void internalStart()
+	{
+		m_keepRunning = true;
 		initializeConsumers();
 		m_finishLatch = new CountDownLatch(1);
 
-		Executors.newSingleThreadExecutor().submit(this);
+		Thread readerThread = new Thread(this);
+		readerThread.start();
 	}
 
-	protected abstract void stopConsumers();
-
-	public void stopReader()
+	private void internalStop()
 	{
 		m_keepRunning = false;
 
@@ -52,32 +59,101 @@ public abstract class TopicReader implements Runnable
 		}
 	}
 
-	protected abstract void readTopic();
+	protected abstract void initializeConsumers();
+
+	public Controller getController()
+	{
+		return m_controller;
+	}
+
+	protected abstract void stopConsumers();
+
+	protected abstract int readTopic();
 
 	@Override
 	public void run()
 	{
+		Stopwatch responseTimer = Stopwatch.createStarted();
+		int failureCount = 0;
 		while (m_keepRunning)
 		{
 			try
 			{
-				readTopic();
+				int count = readTopic();
+				if (count != 0)
+				{
+					System.out.println(getClass().getName() +" : "+ count);
+					responseTimer.reset().start();
+				}
+				failureCount = 0;
 			}
 			catch (Exception e)
 			{
+				failureCount ++;
 				logger.error("Error reading events", e);
 				try
 				{
-					//Wait 5 sec so we don't flood logs
-					Thread.sleep(5000);
+					if (failureCount > 10)
+					{
+						//restart client
+						m_controller.restartReader(false);
+					}
+					else
+					{
+						//Wait 5 sec so we don't flood logs
+						Thread.sleep(5000);
+					}
 				}
 				catch (InterruptedException e1)
 				{
 					Thread.interrupted();
 				}
 			}
+
+			//todo make this configurable
+			if (responseTimer.elapsed(TimeUnit.SECONDS) > 60)
+				m_controller.restartReader(false);
 		}
 
 		m_finishLatch.countDown();
+	}
+
+	public class Controller
+	{
+		public void startReader()
+		{
+			internalStart();
+		}
+
+		public void stopReader()
+		{
+			internalStop();
+		}
+
+		private void restart()
+		{
+			stopReader();
+			try
+			{
+				Thread.sleep(5000);
+			}
+			catch (InterruptedException e)
+			{
+				e.printStackTrace();
+			}
+			startReader();
+		}
+
+		public void restartReader(boolean wait)
+		{
+			m_keepRunning = false;
+			System.out.println("RESTARTING");
+			if (wait)
+				restart();
+			else
+			{
+				new Thread(() -> restart()).start();
+			}
+		}
 	}
 }
