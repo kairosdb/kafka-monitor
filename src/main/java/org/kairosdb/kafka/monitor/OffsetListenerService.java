@@ -194,15 +194,6 @@ public class OffsetListenerService implements InterruptableJob
 		return ret;
 	}
 
-	/*private void postEvent(DataPointEvent event)
-	{
-
-		//Metrics are kinda wonky the first time through so we skip those.
-		if (m_runCounter != 0)
-			m_publisher.post(event);
-	}*/
-
-
 	@Override
 	public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException
 	{
@@ -231,15 +222,7 @@ public class OffsetListenerService implements InterruptableJob
 					logger.error("Error reading kafka offsets for topic: "+groupStats.getTopic(), e);
 
 					//Report failure metric
-					/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-							.putAll(m_monitorConfig.getAdditionalTags())
-							.put("host", m_clientId).build();*/
-
 					consumerStats.gatherFailure().put(1);
-					/*DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
-							offsetTags,
-							m_dataPointFactory.createDataPoint(now, 1));
-					postEvent(failureEvent);*/
 					try
 					{
 						m_endOffsetsConsumer.close();
@@ -263,18 +246,8 @@ public class OffsetListenerService implements InterruptableJob
 					}
 				}
 
-				/*ImmutableSortedMap<String, String> groupTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-						.putAll(m_monitorConfig.getAdditionalTags())
-						.put("group", groupStats.getGroupName())
-						.put("proxy_group", groupStats.getProxyGroup())
-						.put("topic", groupStats.getTopic()).build();*/
-
 				//Report consumer rate
 				consumerStats.consumeCount(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(groupStats.getConsumeCount());
-				/*DataPointEvent event = new DataPointEvent(m_monitorConfig.getConsumerRateMetric(),
-						groupTags,
-						m_dataPointFactory.createDataPoint(now, groupStats.getConsumeCount()));
-				postEvent(event);*/
 
 				long groupLag = 0;
 
@@ -282,46 +255,30 @@ public class OffsetListenerService implements InterruptableJob
 				{
 					//todo document that offset age may be lost when adding new nodes to the monitor group
 
-					/*ImmutableSortedMap<String, String> partitionTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-							.putAll(m_monitorConfig.getAdditionalTags())
-							.put("group", groupStats.getGroupName())
-							.put("proxy_group", groupStats.getProxyGroup())
-							.put("topic", groupStats.getTopic())
-							.put("partition", String.valueOf(offsetStat.getPartition())).build();*/
-
 					//Report offset age
-					//System.out.println("Reporting offset age for "+groupStats.getGroupName());
+					long offsetAge = now - offsetStat.getCommitTime();
 					consumerStats.offsetAge(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic(),
-							String.valueOf(offsetStat.getPartition())).put(now - offsetStat.getCommitTime());
-
-					/*DataPointEvent offsetAge = new DataPointEvent(m_monitorConfig.getOffsetAgeMetric(),
-							partitionTags,
-							m_dataPointFactory.createDataPoint(now, (now - offsetStat.getCommitTime())));
-					postEvent(offsetAge);*/
+							String.valueOf(offsetStat.getPartition())).put(offsetAge);
 
 					Long latestOffset = latestOffsets != null ? latestOffsets.get(offsetStat.getPartition()) : null;
 					if (latestOffset != null) //in case something goes bananas
 					{
 						long partitionLag = calculateDiff(latestOffset, offsetStat.getOffset());
+
+						//Check for stale partitions that have not been read from
+						if (partitionLag != 0 && offsetAge > m_monitorConfig.getStalePartitionAge().toMillis())
+							consumerStats.stalePartitions(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(1);
+
 						groupLag += partitionLag;
 
 						//Report partition lag
 						consumerStats.partitionLag(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic(),
 								String.valueOf(offsetStat.getPartition())).put(partitionLag);
-						/*DataPointEvent partitionLagEvent = new DataPointEvent(m_monitorConfig.getPartitionLagMetric(),
-								partitionTags,
-								m_dataPointFactory.createDataPoint(now, partitionLag));
-						postEvent(partitionLagEvent);*/
 					}
 				}
 
 				//Report group lag
 				consumerStats.groupLag(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(groupLag);
-				/*DataPointEvent groupLagEvent = new DataPointEvent(m_monitorConfig.getGroupLagMetric(),
-						groupTags,
-						m_dataPointFactory.createDataPoint(now, groupLag));
-				postEvent(groupLagEvent);*/
-
 
 				//Report time to process lag
 				long secToProcess = 0;
@@ -329,10 +286,6 @@ public class OffsetListenerService implements InterruptableJob
 					secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
 
 				consumerStats.groupTimeToProcess(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(secToProcess);
-				/*DataPointEvent groupMsToProcessEvent = new DataPointEvent(m_monitorConfig.getGroupTimeToProcessMetric(),
-						groupTags,
-						m_dataPointFactory.createDataPoint(now, secToProcess));
-				postEvent(groupMsToProcessEvent);*/
 			}
 
 
@@ -356,15 +309,7 @@ public class OffsetListenerService implements InterruptableJob
 					}
 				}
 
-				/*ImmutableSortedMap<String, String> producerTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-						.putAll(m_monitorConfig.getAdditionalTags())
-						.put("topic", topic).build();*/
-
 				consumerStats.produceCount(topic).put(offsetCount);
-				/*DataPointEvent producerRateEvent = new DataPointEvent(m_monitorConfig.getProducerRateMetric(),
-						producerTags,
-						m_dataPointFactory.createDataPoint(now, offsetCount));
-				postEvent(producerRateEvent);*/
 			}
 
 
@@ -373,31 +318,14 @@ public class OffsetListenerService implements InterruptableJob
 			m_currentTopicOffsets = new HashMap<>();
 
 			//Report how long it took to gather/report offsets
-			/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-					.putAll(m_monitorConfig.getAdditionalTags())
-					.put("host", m_clientId).build();*/
-
 			consumerStats.offsetGatherTime().put(timer.stop().elapsed(TimeUnit.MILLISECONDS));
-			/*DataPointEvent offsetTimeEvent = new DataPointEvent(m_monitorConfig.getOffsetGatherTimeMetric(),
-					offsetTags,
-					m_dataPointFactory.createDataPoint(now, timer.stop().elapsed(TimeUnit.MILLISECONDS)));
-			postEvent(offsetTimeEvent);*/
-
 		}
 		catch (Exception e)
 		{
 			logger.error("Error processing kafka stats", e);
 
 			//Report failure metric
-			/*ImmutableSortedMap<String, String> offsetTags = new ImmutableSortedMap.Builder<String, String>(Ordering.natural())
-					.putAll(m_monitorConfig.getAdditionalTags())
-					.put("host", m_clientId).build();*/
-
 			consumerStats.gatherFailure().put(1);
-			/*DataPointEvent failureEvent = new DataPointEvent(m_monitorConfig.getGatherFailureMetric(),
-					offsetTags,
-					m_dataPointFactory.createDataPoint(now, 1));
-			postEvent(failureEvent);*/
 
 			//todo this restart isn't working, system is wonky afterwords
 			//Restart the client
