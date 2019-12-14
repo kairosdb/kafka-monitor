@@ -40,6 +40,7 @@ public class PartitionedOffsetReader extends TopicReader
 	public PartitionedOffsetReader(@Named("DefaultConfig") Properties defaultConfig,
 			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker, int instanceId)
 	{
+		super();
 		m_monitorConfig = monitorConfig;
 		m_offsetTracker = offsetsTracker;
 		m_instanceId = instanceId;
@@ -81,12 +82,13 @@ public class PartitionedOffsetReader extends TopicReader
 
 
 	@Override
-	protected void readTopic()
+	protected int readTopic()
 	{
 		ConsumerRecords<String, Offset> records = m_consumer.poll(Duration.ofMillis(100));
 
-		stats.partitionedOffsetsRead().put(records.count());
+		int count = records.count();
 
+		stats.partitionedOffsetsRead().put(count);
 		Set<String> ownedTopics = new HashSet<>();
 
 		for (ConsumerRecord<String, Offset> record : records)
@@ -103,6 +105,8 @@ public class PartitionedOffsetReader extends TopicReader
 			m_producer.send(new ProducerRecord<String, String>(
 					m_monitorConfig.getTopicOwnerTopicName(), ownedTopic, m_monitorConfig.getClientId()));
 		}
+
+		return count;
 	}
 }
 

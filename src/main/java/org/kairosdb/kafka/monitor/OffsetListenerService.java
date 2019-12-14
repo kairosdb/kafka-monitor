@@ -110,25 +110,32 @@ public class OffsetListenerService implements InterruptableJob
 	{
 		try
 		{
-			m_rawOffsetReader.startReader();
-			m_partitionedOffsetReader.startReader();
-			m_ownerReader.startReader();
+			m_rawOffsetReader.getController().startReader();
+			m_partitionedOffsetReader.getController().startReader();
+			m_ownerReader.getController().startReader();
 		}
 		catch (Exception e)
 		{
 			logger.error("Unable to start kafka consumers", e);
 
-			m_rawOffsetReader.stopReader();
-			m_partitionedOffsetReader.stopReader();
-			m_ownerReader.stopReader();
+			m_rawOffsetReader.getController().stopReader();
+			m_partitionedOffsetReader.getController().stopReader();
+			m_ownerReader.getController().stopReader();
 		}
 	}
 
 	private void stopConsumers()
 	{
-		m_rawOffsetReader.stopReader();
-		m_partitionedOffsetReader.stopReader();
-		m_ownerReader.stopReader();
+		m_rawOffsetReader.getController().stopReader();
+		m_partitionedOffsetReader.getController().stopReader();
+		m_ownerReader.getController().stopReader();
+	}
+
+	private void restartConsumers()
+	{
+		m_rawOffsetReader.getController().restartReader(true);
+		m_partitionedOffsetReader.getController().restartReader(true);
+		m_ownerReader.getController().restartReader(true);
 	}
 
 
@@ -394,8 +401,7 @@ public class OffsetListenerService implements InterruptableJob
 
 			//todo this restart isn't working, system is wonky afterwords
 			//Restart the client
-			stopConsumers();
-			startConsumers();
+			restartConsumers();
 		}
 		finally
 		{

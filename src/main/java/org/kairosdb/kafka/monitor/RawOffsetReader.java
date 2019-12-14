@@ -46,6 +46,7 @@ public class RawOffsetReader extends TopicReader
 	public RawOffsetReader(@Named("DefaultConfig")Properties defaultConfig,
 			MonitorConfig monitorConfig, int instanceId)
 	{
+		super();
 		m_monitorConfig = monitorConfig;
 		m_instanceId = instanceId;
 
@@ -111,9 +112,10 @@ public class RawOffsetReader extends TopicReader
 
 
 	@Override
-	protected void readTopic()
+	protected int readTopic()
 	{
 		ConsumerRecords<Bytes, Bytes> records = m_consumer.poll(Duration.ofMillis(100));
+		int count = records.count();
 
 		stats.rawOffsetsRead().put(records.count());
 
@@ -139,5 +141,7 @@ public class RawOffsetReader extends TopicReader
 					m_producer.send(new ProducerRecord<String, Offset>(m_monitorConfig.getOffsetsTopicName(), offset.getTopic(), offset));
 			}
 		}
+
+		return count;
 	}
 }

@@ -23,6 +23,7 @@ public class OwnerReader extends TopicReader
 	public OwnerReader(Properties defaultConfig, MonitorConfig monitorConfig,
 			OffsetsTracker offsetsTracker, int instanceId)
 	{
+		super();
 		m_offsetsTracker = offsetsTracker;
 		m_consumerConfig = (Properties) defaultConfig.clone();
 		m_monitorConfig = monitorConfig;
@@ -51,15 +52,17 @@ public class OwnerReader extends TopicReader
 	}
 
 	@Override
-	protected void readTopic()
+	protected int readTopic()
 	{
 		ConsumerRecords<String, String> records = m_consumer.poll(Duration.ofMillis(100));
 
+		int count = records.count();
 		for (ConsumerRecord<String, String> record : records)
 		{
 			if (!record.value().equals(m_monitorConfig.getClientId()))
 				m_offsetsTracker.removeTrackedTopic(record.key()); //We do not own the topic anymore
 		}
 
+		return count;
 	}
 }
