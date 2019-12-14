@@ -82,7 +82,6 @@ public abstract class TopicReader implements Runnable
 				int count = readTopic();
 				if (count != 0)
 				{
-					System.out.println(getClass().getName() +" : "+ count);
 					responseTimer.reset().start();
 				}
 				failureCount = 0;
@@ -111,7 +110,7 @@ public abstract class TopicReader implements Runnable
 			}
 
 			//todo make this configurable
-			if (responseTimer.elapsed(TimeUnit.SECONDS) > 60)
+			if (responseTimer.elapsed(TimeUnit.SECONDS) > 300)
 				m_controller.restartReader(false);
 		}
 
@@ -147,7 +146,6 @@ public abstract class TopicReader implements Runnable
 		public void restartReader(boolean wait)
 		{
 			m_keepRunning = false;
-			System.out.println("RESTARTING");
 			if (wait)
 				restart();
 			else
