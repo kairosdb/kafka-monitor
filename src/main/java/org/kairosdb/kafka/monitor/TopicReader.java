@@ -1,14 +1,10 @@
 package org.kairosdb.kafka.monitor;
 
-import com.sun.scenario.effect.impl.sw.sse.SSEBlend_SRC_OUTPeer;
-import javafx.scene.paint.Stop;
-import org.apache.commons.lang3.time.StopWatch;
 import org.kairosdb.kafka.monitor.util.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public abstract class TopicReader implements Runnable
