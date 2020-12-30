@@ -3,9 +3,11 @@ package org.kairosdb.kafka.monitor;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
+import com.google.inject.matcher.Matchers;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.kairosdb.kafka.monitor.util.ConfigurationTypeListener;
 
 import javax.inject.Named;
 import java.util.Properties;
@@ -16,23 +18,13 @@ public class KafkaModule  extends AbstractModule
 	@Override
 	protected void configure()
 	{
+		bindListener(Matchers.any(), new ConfigurationTypeListener());
+
 		bind(OffsetListenerService.class).in(Singleton.class);
 		bind(MonitorConfig.class).in(Singleton.class);
 		bind(UpdateTopicsJob.class).in(Singleton.class);
 		bind(OffsetsTracker.class).in(Singleton.class);
-
-		//bind(RawOffsetReader.class).in(Singleton.class);
-		//bind(PartitionedOffsetReader.class).in(Singleton.class);
-
-		/*
-		 Bind object for default consumer config
-		 bind separate services
-		   one service for reading offsets and partitioning them
-		   one service for reading partitioned offsets and reporting metrics
-		   one service for reading ownership
-
-		 bind singleton to keep track of global data
-		 */
+		bind(MetricsTrigger.class).in(Singleton.class);
 	}
 
 	@Provides

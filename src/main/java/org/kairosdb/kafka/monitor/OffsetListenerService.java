@@ -1,8 +1,6 @@
 package org.kairosdb.kafka.monitor;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -17,25 +15,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Named;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static org.kairosdb.kafka.monitor.OffsetStat.calculateDiff;
 
-//todo Add configuration to expire tracked offsets
 
 public class OffsetListenerService implements InterruptableJob
 {
 	private static final Logger logger = LoggerFactory.getLogger(OffsetListenerService.class);
 	private static final ConsumerStats consumerStats = MetricSourceManager.getSource(ConsumerStats.class);
 	public static final String OFFSET_TOPIC = "__consumer_offsets";
+	private final MetricsTrigger m_metricsTrigger;
 
 	private KafkaConsumer<Bytes, Bytes> m_listTopicConsumer;
 	private KafkaConsumer<Bytes, Bytes> m_endOffsetsConsumer;
 	private final MonitorConfig m_monitorConfig;
-	private final String m_clientId;
 	private final ReentrantLock m_executeLock = new ReentrantLock();
 
 	private final OffsetsTracker m_offsetsTracker;
@@ -45,20 +42,19 @@ public class OffsetListenerService implements InterruptableJob
 	private PartitionedOffsetReader m_partitionedOffsetReader;
 	private OwnerReader m_ownerReader;
 
-	private long m_runCounter = 0; //Counts how many times metrics have been reported, used to now when to update topics
-
 	private ClassLoader m_kafkaClassLoader; //used when loading kafka clients
 
 	@Inject
 	public OffsetListenerService(
 			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker,
-			@Named("DefaultConfig")Properties defaultConfig)
+			@Named("DefaultConfig")Properties defaultConfig,
+			MetricsTrigger metricsTrigger)
 	{
 		m_monitorConfig = monitorConfig;
-		m_clientId = m_monitorConfig.getClientId();
 
 		m_offsetsTracker = offsetsTracker;
 		m_defaultConfig = defaultConfig;
+		m_metricsTrigger = metricsTrigger;
 	}
 
 	//Called by external job to refresh our partition data
@@ -75,14 +71,6 @@ public class OffsetListenerService implements InterruptableJob
 
 	public void start()
 	{
-
-		//Kafka uses the thread context loader to load stuff.  We have to swap
-		//it with the one that loaded this class as Kairos loaded this plugin
-		//in a separate class loader.
-		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
-		m_kafkaClassLoader = this.getClass().getClassLoader();
-		Thread.currentThread().setContextClassLoader(m_kafkaClassLoader);
-
 		m_rawOffsetReader = new RawOffsetReader(m_defaultConfig, m_monitorConfig, 0);
 		m_partitionedOffsetReader = new PartitionedOffsetReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
 		m_ownerReader = new OwnerReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
@@ -93,17 +81,8 @@ public class OffsetListenerService implements InterruptableJob
 		m_endOffsetsConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
 
 		updateKafkaTopics();
-		//resetOffsets();
 
-		try
-		{
-			startConsumers();
-		}
-		finally
-		{
-			//put it back
-			Thread.currentThread().setContextClassLoader(contextClassLoader);
-		}
+		startConsumers();
 	}
 
 	private void startConsumers()
@@ -188,8 +167,7 @@ public class OffsetListenerService implements InterruptableJob
 				ret.put(entry.getKey().partition(), entry.getValue());
 		}
 
-		//todo change to debug statement
-		//System.out.println("Get latest topic offsets: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
+		logger.debug("Get latest topic offsets time: {}", timer.stop().elapsed(TimeUnit.MILLISECONDS));
 
 		return ret;
 	}
@@ -258,7 +236,7 @@ public class OffsetListenerService implements InterruptableJob
 					//Report offset age
 					long offsetAge = now - offsetStat.getCommitTime();
 					consumerStats.offsetAge(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic(),
-							String.valueOf(offsetStat.getPartition())).put(offsetAge);
+							String.valueOf(offsetStat.getPartition())).put(Duration.ofMillis(offsetAge));
 
 					Long latestOffset = latestOffsets != null ? latestOffsets.get(offsetStat.getPartition()) : null;
 					if (latestOffset != null) //in case something goes bananas
@@ -267,7 +245,7 @@ public class OffsetListenerService implements InterruptableJob
 
 						//Check for stale partitions that have not been read from
 						if (partitionLag != 0 && offsetAge > m_monitorConfig.getStalePartitionAge().toMillis())
-							consumerStats.stalePartitions(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(1);
+							consumerStats.stalePartitions(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(Duration.ofMillis(offsetAge));
 
 						groupLag += partitionLag;
 
@@ -285,7 +263,7 @@ public class OffsetListenerService implements InterruptableJob
 				if (groupStats.getCurrentRate() != 0.0)
 					secToProcess = (long)((double)groupLag / groupStats.getCurrentRate());
 
-				consumerStats.groupTimeToProcess(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(secToProcess);
+				consumerStats.groupTimeToProcess(groupStats.getGroupName(), groupStats.getProxyGroup(), groupStats.getTopic()).put(Duration.ofSeconds(secToProcess));
 			}
 
 
@@ -318,7 +296,7 @@ public class OffsetListenerService implements InterruptableJob
 			m_currentTopicOffsets = new HashMap<>();
 
 			//Report how long it took to gather/report offsets
-			consumerStats.offsetGatherTime().put(timer.stop().elapsed(TimeUnit.MILLISECONDS));
+			consumerStats.offsetGatherTime().put(Duration.ofMillis(timer.stop().elapsed(TimeUnit.MILLISECONDS)));
 		}
 		catch (Exception e)
 		{
@@ -336,8 +314,6 @@ public class OffsetListenerService implements InterruptableJob
 			m_executeLock.unlock();
 		}
 
-		m_runCounter ++;
-		if (m_runCounter % 15 == 0) //update topics every 15 min
-			updateKafkaTopics();
+		m_metricsTrigger.reportMetrics();
 	}
 }

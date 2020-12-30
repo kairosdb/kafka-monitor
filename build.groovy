@@ -3,6 +3,7 @@ import org.freecompany.redline.header.Architecture
 import org.freecompany.redline.header.Os
 import org.freecompany.redline.header.RpmType
 import org.freecompany.redline.payload.Directive
+import groovy.yaml.*
 import tablesaw.*
 import tablesaw.addons.GZipRule
 import tablesaw.addons.TarRule
@@ -26,22 +27,14 @@ println("===============================================")
 
 saw.setProperty(Tablesaw.PROP_MULTI_THREAD_OUTPUT, Tablesaw.PROP_VALUE_ON)
 
-programName = "kairos-kafka-monitor"
 //Do not use '-' in version string, it breaks rpm uninstall.
-version = "1.2.1"
 release = saw.getProperty("KAIROS_RELEASE_NUMBER", "1") //package release number
-summary = "KairosDB Kafka Topic Monitor Plugin"
-description = """\
-This plugin monitors kafka topic lag for individual consumers and reports metrics
-"""
-
 
 saw = Tablesaw.getCurrentTablesaw()
 saw.includeDefinitionFile("definitions.xml")
 
 
-rpmDir = "build/rpm"
-buildDirRule = new DirectoryRule("build")
+rpmDir = "target/rpm"
 new DirectoryRule("target")
 rpmDirRule = new DirectoryRule(rpmDir)
 
@@ -49,49 +42,28 @@ rpmDirRule = new DirectoryRule(rpmDir)
 def pom = new XmlSlurper().parseText(new File("pom.xml").text)
 version = pom.version.text()
 
+//Read stork definitions
+storkYml = new YamlSlurper().parse(new File("src/main/launchers/stork.yml"))
+programName = storkYml.name
+summary = storkYml.short_description
+description = storkYml.long_description
+
+
 mvnRule = new SimpleRule("maven-package")
 		.setDescription("Run maven package build")
 		.setMakeAction("doMavenBuild")
 
 def doMavenBuild(Rule rule)
 {
-	saw.exec("mvn clean package")
+	saw.exec("mvn package")
 }
 
-//------------------------------------------------------------------------------
-//Build zip deployable application
 rpmFile = "$programName-$version-${release}.rpm"
 srcRpmFile = "$programName-$version-${release}.src.rpm"
 
-
-libFileSets = [
-		new RegExFileSet("target", ".*\\.jar"),
-		new RegExFileSet("target/dependency", ".*\\.jar")
-]
-
-scriptsFileSet = new RegExFileSet("src/scripts", ".*").addExcludeFile("kairosdb-env.sh")
-webrootFileSet = new RegExFileSet("webroot", ".*").recurse()
-
-zipLibDir = "$programName/lib/kafka-monitor"
-zipConfDir = "$programName/conf"
-tarRule = new TarRule("build/${programName}-${version}-${release}.tar")
-		.addDepend(mvnRule)
-		.addDepend(buildDirRule)
-		.addFileTo(zipConfDir, "src/main/resources", "kafka-monitor.properties")
-		.setFilePermission(".*\\.sh", 0755)
-
-for (AbstractFileSet fs in libFileSets)
-	tarRule.addFileSetTo(zipLibDir, fs)
-
-
-gzipRule = new GZipRule("package").setSource(tarRule.getTarget())
-		.setDescription("Create deployable tar file")
-		.setTarget("build/${programName}-${version}-${release}.tar.gz")
-		.addDepend(tarRule)
-
 //------------------------------------------------------------------------------
 //Build rpm file
-rpmBaseInstallDir = "/opt/kairosdb"
+rpmBaseInstallDir = "/opt/topic-monitor"
 rpmRule = new SimpleRule("package-rpm").setDescription("Build RPM Package")
 		.addDepend(mvnRule)
 		.addDepend(rpmDirRule)
@@ -122,15 +94,20 @@ def doRPM(Rule rule)
 				sourceRpm = srcRpmFile
 			}
 
-	rpmBuilder.addDependencyMore("kairosdb", "1.2.0")
+	rpmBuilder.setPrefixes(rpmBaseInstallDir)
+	rpmBuilder.addDependencyMore("jre", storkYml.min_java_version)
 
-	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/lib/kafka-monitor", new RegExFileSet("target", ".*\\.jar"))
-	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/lib/kafka-monitor", new RegExFileSet("target/dependency", ".*\\.jar"))
+	rpmBuilder.addFile("$rpmBaseInstallDir/bin/topic-monitor", new File("target/stork/bin/topic-monitor"), 0755);
 
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/application.conf",
+			new File("target/stork/conf/application.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/logback.xml",
+			new File("target/stork/conf/logback.xml"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
+	rpmBuilder.addFile("$rpmBaseInstallDir/conf/metrics4j.conf",
+			new File("target/stork/conf/metrics4j.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
 
-	rpmBuilder.addFile("$rpmBaseInstallDir/conf/kafka-monitor.properties",
-			new File("src/main/resources/kafka-monitor.properties"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE))
-
+	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/lib", new RegExFileSet("target/stork/lib", ".*\\.jar"))
+	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/share", new RegExFileSet("target/stork/share", ".*").recurse())
 
 	println("Building RPM "+rule.getTarget())
 	outputFile = new FileOutputStream(rule.getTarget())
@@ -144,10 +121,7 @@ def addFileSetToRPM(Builder builder, String destination, AbstractFileSet files)
 	for (AbstractFileSet.File file : files.getFiles())
 	{
 		File f = new File(file.getBaseDir(), file.getFile())
-		if (f.getName().endsWith(".sh"))
-			builder.addFile(destination + "/" +file.getFile(), f, 0755)
-		else
-			builder.addFile(destination + "/" + file.getFile(), f)
+		builder.addFile(destination + "/" + file.getFile(), f)
 	}
 }
 

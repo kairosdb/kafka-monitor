@@ -4,19 +4,22 @@ import org.kairosdb.kafka.monitor.util.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public abstract class TopicReader implements Runnable
 {
 	private static final Logger logger = LoggerFactory.getLogger(TopicReader.class);
+	private final Duration m_deadClientRestart;
 	private volatile boolean m_keepRunning = true;
 	private CountDownLatch m_finishLatch;
 	private final Controller m_controller;
 
-	protected TopicReader()
+	protected TopicReader(Duration deadClientRestart)
 	{
 		m_controller = new Controller();
+		m_deadClientRestart = deadClientRestart;
 	}
 
 	private void internalStart()
@@ -105,8 +108,8 @@ public abstract class TopicReader implements Runnable
 				}
 			}
 
-			//todo make this configurable
-			if (responseTimer.elapsed(TimeUnit.SECONDS) > 300)
+			//If we go so long without reading data from kafka, we restart the readers
+			if (responseTimer.elapsed(TimeUnit.MILLISECONDS) > m_deadClientRestart.toMillis())
 				m_controller.restartReader(false);
 		}
 

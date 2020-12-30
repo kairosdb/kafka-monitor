@@ -5,51 +5,63 @@ import com.google.inject.name.Named;
 
 import java.time.Duration;
 
-
+/**
+ If you add any property that is a Duration then you must add that property to
+ DurationConfigModule so it can be parsed correctly
+ */
 public class MonitorConfig
 {
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.application_id")
+	@Named("topic_monitor.application_id")
 	private String m_applicationId = "kafka_monitor";
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.client_id")
+	@Named("topic_monitor.client_id")
 	private String m_clientId = null; //defaults to hostname if null
 
 	@Inject
-	@Named("kairosdb.kafka_monitor.bootstrap_servers")
+	@Named("topic_monitor.bootstrap_servers")
 	private String m_bootStrapServers;
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.topic_owner_topic_name")
+	@Named("topic_monitor.topic_owner_topic_name")
 	private String m_topicOwnerTopicName = "kafka_monitor_topic_owner";
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.offsets_topic_name")
+	@Named("topic_monitor.offsets_topic_name")
 	private String m_offsetsTopicName = "kafka_monitor_offsets";
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.exclude_monitor_offsets")
+	@Named("topic_monitor.exclude_monitor_offsets")
 	private boolean m_excludeMonitorOffsets = true;
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.rate_tracker_size")
+	@Named("topic_monitor.rate_tracker_size")
 	private int m_rateTrackerSize = 10;
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor.tracker_retention_minutes")
-	private long m_trackerRetentionMinutes = 1_440; //default to 24hrs
+	@Named("topic_monitor.tracker_retention")
+	private Duration m_trackerRetentionMinutes = Duration.ofHours(24);
 
 	@Inject(optional = true)
-	@Named("kairosdb.kafka_monitor_stale_partition_age")
-	private Duration m_stalePartitionAge;
+	@Named("topic_monitor.stale_partition_age")
+	private Duration m_stalePartitionAge = Duration.ofMinutes(1);
 
 	@Inject
 	@Named("HOSTNAME")
 	private String m_hostName = "localhost";
 
+	@Inject(optional = false)
+	@Named("topic_monitor.dead_client_restart")
+	private Duration m_deadClientRestart = Duration.ofMinutes(5);
+
 	public MonitorConfig()
 	{
+	}
+
+	public Duration getDeadClientRestart()
+	{
+		return m_deadClientRestart;
 	}
 
 	public Duration getStalePartitionAge()
@@ -95,7 +107,7 @@ public class MonitorConfig
 		return m_rateTrackerSize;
 	}
 
-	public long getTrackerRetentionMinutes()
+	public Duration getTrackerRetention()
 	{
 		return m_trackerRetentionMinutes;
 	}

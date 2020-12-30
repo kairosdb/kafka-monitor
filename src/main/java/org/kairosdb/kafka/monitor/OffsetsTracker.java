@@ -7,6 +7,7 @@ import com.google.inject.Inject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.common.PartitionInfo;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class OffsetsTracker
 {
 
-	private final long m_trackerRetentionMinutes;
+	private final Duration m_trackerRetention;
 	private Set<String> m_topics = ConcurrentHashMap.newKeySet();
 	private Map<Pair<String, String>, GroupStats> m_groupStatsMap = new ConcurrentHashMap<>();
 
@@ -28,7 +29,7 @@ public class OffsetsTracker
 	public OffsetsTracker(MonitorConfig config)
 	{
 		m_rateTrackerSize = config.getRateTrackerSize();
-		m_trackerRetentionMinutes = config.getTrackerRetentionMinutes();
+		m_trackerRetention = config.getTrackerRetention();
 	}
 
 	public void removeTrackedTopic(String topic)
@@ -51,7 +52,7 @@ public class OffsetsTracker
 		if (groupStats == null)
 		{
 			groupStats = new GroupStats(offset.getGroup(), offset.getTopic(),
-					m_rateTrackerSize, m_trackerRetentionMinutes);
+					m_rateTrackerSize, m_trackerRetention);
 			m_groupStatsMap.put(groupKey, groupStats);
 		}
 

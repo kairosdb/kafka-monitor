@@ -23,7 +23,7 @@ public class OwnerReader extends TopicReader
 	public OwnerReader(Properties defaultConfig, MonitorConfig monitorConfig,
 			OffsetsTracker offsetsTracker, int instanceId)
 	{
-		super();
+		super(monitorConfig.getDeadClientRestart());
 		m_offsetsTracker = offsetsTracker;
 		m_consumerConfig = (Properties) defaultConfig.clone();
 		m_monitorConfig = monitorConfig;

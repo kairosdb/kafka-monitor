@@ -3,6 +3,7 @@ package org.kairosdb.kafka.monitor;
 import com.google.common.collect.ImmutableList;
 import org.kairosdb.kafka.monitor.util.Stopwatch;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,15 +19,15 @@ public class GroupStats
 	private final Object m_offsetLock = new Object();
 	private final ProcessRate m_processRate;
 	private Stopwatch m_rateTimer;
-	private final long m_trackerRetention;  //Minutes to track offsets
+	private final Duration m_trackerRetention;
 
 
-	public GroupStats(String groupName, String topic, int trackerCount, long trackerRetention)
+	public GroupStats(String groupName, String topic, int trackerCount, Duration trackerRetention)
 	{
 		this(groupName, topic, new ProcessRate(trackerCount), trackerRetention);
 	}
 
-	private GroupStats(String groupName, String topic, ProcessRate processRate, long trackerRetention)
+	private GroupStats(String groupName, String topic, ProcessRate processRate, Duration trackerRetention)
 	{
 		m_groupName = groupName;
 		m_topic = topic;
@@ -56,7 +57,7 @@ public class GroupStats
 	 */
 	public GroupStats copyAndReset()
 	{
-		long expireTime = System.currentTimeMillis() - (m_trackerRetention * 60 * 1000);
+		long expireTime = System.currentTimeMillis() - m_trackerRetention.toMillis();
 		GroupStats copy = new GroupStats(m_groupName, m_topic, m_processRate, m_trackerRetention);
 
 		synchronized (m_offsetLock)

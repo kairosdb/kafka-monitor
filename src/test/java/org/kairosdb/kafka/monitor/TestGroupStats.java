@@ -3,6 +3,7 @@ package org.kairosdb.kafka.monitor;
 import org.junit.jupiter.api.Test;
 import org.kairosdb.kafka.monitor.util.Stopwatch;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,7 +28,7 @@ public class TestGroupStats
 	{
 		Stopwatch rateTimer = getStopwatch(10);
 
-		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
+		GroupStats gs = new GroupStats("foo", "topic", 10, Duration.ofMinutes(1));
 		gs.setRateTimer(rateTimer);
 
 		gs.offsetChange(1, 5, 1000);
@@ -45,7 +46,7 @@ public class TestGroupStats
 	{
 		Stopwatch rateTimer = getStopwatch(1);
 
-		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
+		GroupStats gs = new GroupStats("foo", "topic", 10, Duration.ofMinutes(1));
 		gs.setRateTimer(rateTimer);
 
 		gs.offsetChange(1, 5, 1000);
@@ -62,7 +63,7 @@ public class TestGroupStats
 	public void test_offsetChangeWithNoTimeChange()
 	{
 		Stopwatch rateTimer = getStopwatch(1);
-		GroupStats gs = new GroupStats("foo", "topic", 10, 1);
+		GroupStats gs = new GroupStats("foo", "topic", 10, Duration.ofMinutes(1));
 		gs.setRateTimer(rateTimer);
 
 		gs.offsetChange(1, 5, 1000);
@@ -78,7 +79,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_noSplit()
 	{
-		GroupStats gs = new GroupStats("MyAwesomeGroup", "topic", 10, 1);
+		GroupStats gs = new GroupStats("MyAwesomeGroup", "topic", 10, Duration.ofMinutes(1));
 
 		assertEquals("MyAwesomeGroup", gs.getProxyGroup());
 	}
@@ -86,7 +87,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_withGroup()
 	{
-		GroupStats gs = new GroupStats("MyAwesome__Group", "topic", 10, 1);
+		GroupStats gs = new GroupStats("MyAwesome__Group", "topic", 10, Duration.ofMinutes(1));
 
 		assertEquals("MyAwesome", gs.getProxyGroup());
 	}
@@ -94,7 +95,7 @@ public class TestGroupStats
 	@Test
 	public void test_proxyGroup_multipleSplits()
 	{
-		GroupStats gs = new GroupStats("My__Awesome__Group", "topic", 10, 1);
+		GroupStats gs = new GroupStats("My__Awesome__Group", "topic", 10, Duration.ofMinutes(1));
 
 		assertEquals("My__Awesome", gs.getProxyGroup());
 	}

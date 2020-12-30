@@ -46,7 +46,7 @@ public class RawOffsetReader extends TopicReader
 	public RawOffsetReader(@Named("DefaultConfig")Properties defaultConfig,
 			MonitorConfig monitorConfig, int instanceId)
 	{
-		super();
+		super(monitorConfig.getDeadClientRestart());
 		m_monitorConfig = monitorConfig;
 		m_instanceId = instanceId;
 
@@ -119,7 +119,7 @@ public class RawOffsetReader extends TopicReader
 
 		stats.rawOffsetsRead().put(records.count());
 
-		long expireTime = System.currentTimeMillis() - (m_monitorConfig.getTrackerRetentionMinutes() * 60 * 1000);
+		long expireTime = System.currentTimeMillis() - (m_monitorConfig.getTrackerRetention().toMillis());
 
 		for (ConsumerRecord<Bytes, Bytes> record : records)
 		{

@@ -40,7 +40,7 @@ public class PartitionedOffsetReader extends TopicReader
 	public PartitionedOffsetReader(@Named("DefaultConfig") Properties defaultConfig,
 			MonitorConfig monitorConfig, OffsetsTracker offsetsTracker, int instanceId)
 	{
-		super();
+		super(monitorConfig.getDeadClientRestart());
 		m_monitorConfig = monitorConfig;
 		m_offsetTracker = offsetsTracker;
 		m_instanceId = instanceId;
