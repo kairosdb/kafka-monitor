@@ -34,7 +34,6 @@ public class App extends Jooby implements JobFactory
 	{
 		Properties props = new Properties();
 		props.setProperty("org.quartz.threadPool.threadCount", "4");
-		props.setProperty(StdSchedulerFactory.PROP_SCHED_SKIP_UPDATE_CHECK, "true");
 		MetricsContext metricsContext = MetricSourceManager.getMetricConfig().getContext();
 
 
