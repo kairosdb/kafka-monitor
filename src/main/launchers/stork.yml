@@ -38,7 +38,7 @@ working_dir_mode: APP_HOME
 # Users can either entirely override it at runtime with the environment variable
 # JAVA_ARGS or append extra arguments with the EXTRA_JAVA_ARGS enviornment variable
 # or by passing them in on the command-line too.
-#java_args: "-Dtest=foo"
+java_args: "-DMETRICS4J_CONFIG=conf/metrics4j.conf"
 
 # Minimum version of java required (system will be searched for acceptable jvm)
 # Defaults to Java 1.6.
