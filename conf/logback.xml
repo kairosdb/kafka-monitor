@@ -5,10 +5,33 @@
       <pattern>[%d{ISO8601}]-[%thread] %-5level %logger - %msg%n</pattern>
     </encoder>
   </appender>
+  <appender name="logfile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>log/topic-monitor.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <!-- daily rollover -->
+      <fileNamePattern>log/topic-monitor.%d.%i.log.gz</fileNamePattern>
+
+      <!-- keep 30 days' worth of history -->
+      <maxHistory>30</maxHistory>
+
+      <!-- or whenever the file size reaches 100MB -->
+      <timeBasedFileNamingAndTriggeringPolicy
+              class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+        <maxFileSize>100MB</maxFileSize>
+      </timeBasedFileNamingAndTriggeringPolicy>
+
+      <!-- Whenever startup, will run the rollover -->
+      <!--<cleanHistoryOnStart>true</cleanHistoryOnStart>-->
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{MM-dd|HH:mm:ss.SSS} [%thread] %-5level [%file:%line] - %msg%n</pattern>
+    </encoder>
+  </appender>
 
   <!--<logger name="org.kairosdb.metrics4j" level="DEBUG"/>-->
 
   <root level="INFO">
     <appender-ref ref="STDOUT" />
+    <appender-ref ref="logfile"/>
   </root>
 </configuration>

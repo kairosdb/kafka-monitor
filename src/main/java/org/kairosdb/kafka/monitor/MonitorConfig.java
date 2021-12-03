@@ -2,8 +2,10 @@ package org.kairosdb.kafka.monitor;
 
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+import com.typesafe.config.Config;
 
 import java.time.Duration;
+import java.util.Map;
 
 /**
  If you add any property that is a Duration then you must add that property to
@@ -111,4 +113,6 @@ public class MonitorConfig
 	{
 		return m_trackerRetentionMinutes;
 	}
+
+
 }
