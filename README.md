@@ -2,6 +2,10 @@
 A stand alone service that reads kafka topic offsets and reports metrics using 
 metrics4j to your favorite time-series database (see https://github.com/kairosdb/metrics4j for details)
 
+You can run multiple monitors against a single Kafka cluster for redundancy and fail over.  The Kafka Topic Montior
+will divide the work between each instance by using internal kafka topics.  This provides a reliable platform
+for alerts to detect when consumers are having problems.
+
 ### Metrics that this service will report
 For metric names and configuring the destination please see the metrics4j.conf file
   * Topic producer count - count of events for each topic being produced.
