@@ -1,6 +1,7 @@
 package org.kairosdb.kafka.monitor;
 
 import org.kairosdb.metrics4j.annotation.Key;
+import org.kairosdb.metrics4j.collectors.DoubleCollector;
 import org.kairosdb.metrics4j.collectors.DurationCollector;
 import org.kairosdb.metrics4j.collectors.LongCollector;
 
