@@ -8,8 +8,8 @@ import com.google.inject.util.Modules;
 import io.jooby.Environment;
 import io.jooby.Extension;
 import io.jooby.Jooby;
-import io.jooby.di.GuiceModule;
-import io.jooby.di.JoobyModule;
+import io.jooby.guice.GuiceModule;
+import io.jooby.guice.JoobyModule;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;

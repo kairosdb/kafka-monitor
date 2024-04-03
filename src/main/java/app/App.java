@@ -1,7 +1,6 @@
 package app;
 
 import io.jooby.Jooby;
-import io.jooby.di.GuiceModule;
 import org.kairosdb.kafka.monitor.KTMGuiceModule;
 import org.kairosdb.kafka.monitor.KafkaModule;
 import org.kairosdb.kafka.monitor.MetricsTrigger;

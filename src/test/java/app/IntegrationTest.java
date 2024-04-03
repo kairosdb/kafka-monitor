@@ -1,6 +1,5 @@
 package app;
 
-import io.jooby.JoobyTest;
 import io.jooby.StatusCode;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;

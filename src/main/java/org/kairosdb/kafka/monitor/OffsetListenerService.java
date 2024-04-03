@@ -1,7 +1,8 @@
 package org.kairosdb.kafka.monitor;
 
 import com.google.common.base.Stopwatch;
-import com.google.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Inject;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
@@ -14,7 +15,6 @@ import org.quartz.JobExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Named;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;

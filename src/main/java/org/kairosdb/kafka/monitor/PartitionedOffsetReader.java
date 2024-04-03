@@ -1,6 +1,7 @@
 package org.kairosdb.kafka.monitor;
 
-import com.google.inject.Inject;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -14,7 +15,6 @@ import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Named;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;

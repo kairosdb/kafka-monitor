@@ -1,6 +1,5 @@
 package app;
 
-import io.jooby.MockRouter;
 import io.jooby.StatusCode;
 import org.junit.jupiter.api.Test;
 

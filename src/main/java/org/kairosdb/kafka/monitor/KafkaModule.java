@@ -6,12 +6,12 @@ import com.google.inject.Singleton;
 import com.google.inject.matcher.Matchers;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigValue;
+import jakarta.inject.Named;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.kairosdb.kafka.monitor.util.ConfigurationTypeListener;
 
-import javax.inject.Named;
 import java.util.Map;
 import java.util.Properties;
 

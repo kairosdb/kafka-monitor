@@ -1,6 +1,7 @@
 package org.kairosdb.kafka.monitor;
 
-import com.google.inject.Inject;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -15,7 +16,6 @@ import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Named;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
@@ -127,14 +127,13 @@ public class RawOffsetReader extends TopicReader
 			{
 				Offset offset = Offset.createFromBytes(record.key().get(), record.value().get());
 
-				//todo check if our own offsets
-				//todo !value.getTopic().equals(OFFSET_TOPIC)
+				//check if our own offsets
 				if (m_monitorConfig.isExcludeMonitorOffsets() && offset.getGroup().startsWith(m_monitorConfig.getApplicationId()))
 				{
 					continue;
 				}
 
-				//System.out.println(offset.getTopic());
+				System.out.println("Topic: "+offset.getTopic()+" Partition: "+offset.getPartition()+" Offset: "+offset.getOffset());
 				//Filter out expired offsets.  We can still read them long after they have expired
 				//System.out.println(offset.getCommitTime() + " " + expireTime);
 				if (offset.getCommitTime() > expireTime)
