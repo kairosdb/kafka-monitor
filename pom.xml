@@ -122,7 +122,7 @@
         </configuration>
       </plugin>
       <!-- Build uber jar, if used with stork it will package an uber jar into the gz with all the other classes as well-->
-      <!--<plugin>
+      <plugin>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.2.1</version>
         <executions>
@@ -145,7 +145,7 @@
             </configuration>
           </execution>
         </executions>
-      </plugin>-->
+      </plugin>
       <plugin>
         <groupId>com.fizzed</groupId>
         <artifactId>stork-maven-plugin</artifactId>

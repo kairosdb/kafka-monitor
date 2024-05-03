@@ -7,6 +7,7 @@ importPackage(Packages.groovy.yaml);
 importPackage(Packages.java.nio.file);
 importPackage(Packages.java.io);
 importPackage(Packages.org.yaml.snakeyaml);
+importPackage(Packages.javax.swing);
 
 saw.setProperty(Tablesaw.PROP_MULTI_THREAD_OUTPUT, Tablesaw.PROP_VALUE_ON);
 
@@ -76,17 +77,17 @@ function doRPM(rule)
 	rpmBuilder.setPrefixes(rpmBaseInstallDir);
 	rpmBuilder.addDependencyMore("jre", yamlMap.get("min_java_version"));
 
-	rpmBuilder.addFile("$rpmBaseInstallDir/bin/topic-monitor", new File("target/stork/bin/topic-monitor"), 0755);
+	rpmBuilder.addFile(`${rpmBaseInstallDir}/bin/topic-monitor`, new File("target/stork/bin/topic-monitor"), 0755);
 
-	rpmBuilder.addFile("$rpmBaseInstallDir/conf/application.conf",
+	rpmBuilder.addFile(`${rpmBaseInstallDir}/conf/application.conf`,
 			new File("target/stork/conf/application.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
-	rpmBuilder.addFile("$rpmBaseInstallDir/conf/logback.xml",
+	rpmBuilder.addFile(`${rpmBaseInstallDir}/conf/logback.xml`,
 			new File("target/stork/conf/logback.xml"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
-	rpmBuilder.addFile("$rpmBaseInstallDir/conf/metrics4j.conf",
+	rpmBuilder.addFile(`${rpmBaseInstallDir}/conf/metrics4j.conf`,
 			new File("target/stork/conf/metrics4j.conf"), 0644, new Directive(Directive.RPMFILE_CONFIG | Directive.RPMFILE_NOREPLACE));
 
-	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/lib", new RegExFileSet("target/stork/lib", ".*\\.jar"));
-	addFileSetToRPM(rpmBuilder, "$rpmBaseInstallDir/share", new RegExFileSet("target/stork/share", ".*").recurse());
+	addFileSetToRPM(rpmBuilder, `${rpmBaseInstallDir}/lib`, new RegExFileSet("target/stork/lib", ".*\\.jar"));
+	addFileSetToRPM(rpmBuilder, `${rpmBaseInstallDir}/share`, new RegExFileSet("target/stork/share", ".*").recurse());
 
 	print(`Building RPM ${rule.getTarget()}`);
 	outputFile = new FileOutputStream(rule.getTarget());
@@ -110,7 +111,31 @@ debRule = new SimpleRule("package-deb").setDescription("Build Deb Package")
 
 function doDeb(rule)
 {
+	//Prompt the user for the sudo password
+	//TODO: package using jdeb
+	var jpf = new JPasswordField();
+	var password = saw.getProperty("sudo");
 
+	if (password == null)
+	{
+		var resp = JOptionPane.showConfirmDialog(null,
+				jpf, "Enter sudo password:",
+				JOptionPane.OK_CANCEL_OPTION);
+
+		if (resp == 0)
+			password = jpf.getText();
+	}
+
+	if (password != null)
+	{
+		var sudo = saw.createAsyncProcess(rpmDir, `sudo -S alien --scripts --bump=0 --to-deb ${rpmFile}`);
+		sudo.run();
+		//pass the password to the process on stdin
+		sudo.sendMessage(password+"\n");
+		sudo.waitForProcess();
+		if (sudo.getExitCode() != 0)
+			throw new TablesawException("Unable to run alien application");
+	}
 }
 
 
