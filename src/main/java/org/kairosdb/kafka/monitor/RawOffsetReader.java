@@ -133,7 +133,7 @@ public class RawOffsetReader extends TopicReader
 					continue;
 				}
 
-				System.out.println("Topic: "+offset.getTopic()+" Partition: "+offset.getPartition()+" Offset: "+offset.getOffset());
+				//System.out.println("Topic: "+offset.getTopic()+" Partition: "+offset.getPartition()+" Offset: "+offset.getOffset());
 				//Filter out expired offsets.  We can still read them long after they have expired
 				//System.out.println(offset.getCommitTime() + " " + expireTime);
 				if (offset.getCommitTime() > expireTime)
