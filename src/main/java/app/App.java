@@ -34,6 +34,7 @@ public class App extends Jooby implements JobFactory
 		Properties props = new Properties();
 		props.setProperty("org.quartz.threadPool.threadCount", "4");
 		MetricsContext metricsContext = MetricSourceManager.getMetricConfig().getContext();
+		//install(new NullServer());
 
 
 		try
@@ -43,9 +44,9 @@ public class App extends Jooby implements JobFactory
 			m_scheduler.setJobFactory(this);
 
 			install(new KTMGuiceModule(new KafkaModule()));
-			get("/", ctx -> "Welcome to Jooby!");
+			//get("/", ctx -> "Welcome to Jooby!");
 
-			onStarting(() ->
+			onStarted(() ->
 			{
 				metricsContext.registerTrigger("kafka-monitor-trigger", require(MetricsTrigger.class));
 				metricsContext.addTriggerToPath("kafka-monitor-trigger", Collections.EMPTY_LIST);

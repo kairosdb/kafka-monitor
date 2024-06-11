@@ -1,2 +1,5 @@
-mvn clean package; mv target/*.jar target/dependency/
+mvn clean package
+cd target
+tar -xf *.tar.gz
+
 
