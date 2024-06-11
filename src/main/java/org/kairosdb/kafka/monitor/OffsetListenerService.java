@@ -76,9 +76,9 @@ public class OffsetListenerService implements InterruptableJob
 		m_ownerReader = new OwnerReader(m_defaultConfig, m_monitorConfig, m_offsetsTracker, 0);
 
 
-		m_listTopicConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
+		m_listTopicConsumer = new KafkaConsumer<>(m_defaultConfig);
 
-		m_endOffsetsConsumer = new KafkaConsumer<Bytes, Bytes>(m_defaultConfig);
+		m_endOffsetsConsumer = new KafkaConsumer<>(m_defaultConfig);
 
 		updateKafkaTopics();
 

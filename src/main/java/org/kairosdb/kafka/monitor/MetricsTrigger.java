@@ -10,7 +10,7 @@ import java.time.Instant;
 
 public class MetricsTrigger implements Trigger
 {
-	private static Logger log = LoggerFactory.getLogger(MetricsTrigger.class);
+	private static final Logger log = LoggerFactory.getLogger(MetricsTrigger.class);
 	private MetricCollection m_collection;
 
 	@Override

@@ -17,9 +17,7 @@ public class OffsetStat
 
 	public OffsetStat copy()
 	{
-		OffsetStat copy = new OffsetStat(m_partition, m_offset, m_commitTime);
-
-		return copy;
+		return new OffsetStat(m_partition, m_offset, m_commitTime);
 	}
 
 	public long updateOffset(long offset, long commitTime)
