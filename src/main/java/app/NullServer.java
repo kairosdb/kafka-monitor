@@ -21,6 +21,12 @@ public class NullServer extends Server.Base
 		return this;
 	}
 
+	@Override
+	protected ServerOptions defaultOptions()
+	{
+		return null;
+	}
+
 	@NonNull
 	@Override
 	public String getName()
@@ -28,18 +34,12 @@ public class NullServer extends Server.Base
 		return "NullServer";
 	}
 
-	@NonNull
-	@Override
-	public ServerOptions getOptions()
-	{
-		return new ServerOptions();
-	}
 
 	@NonNull
 	@Override
-	public Server start(@NonNull Jooby application)
+	public Server start(@NonNull Jooby... application)
 	{
-		m_applications.add(application);
+		m_applications.add(application[0]);
 		fireReady(m_applications);
 		return this;
 	}
