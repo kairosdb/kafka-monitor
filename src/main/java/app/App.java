@@ -1,6 +1,9 @@
 package app;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import io.jooby.Jooby;
+import io.jooby.Server;
+import io.jooby.ServerOptions;
 import org.kairosdb.kafka.monitor.KTMGuiceModule;
 import org.kairosdb.kafka.monitor.KafkaModule;
 import org.kairosdb.kafka.monitor.MetricsTrigger;
@@ -34,8 +37,6 @@ public class App extends Jooby implements JobFactory
 		Properties props = new Properties();
 		props.setProperty("org.quartz.threadPool.threadCount", "4");
 		MetricsContext metricsContext = MetricSourceManager.getMetricConfig().getContext();
-		//install(new NullServer());
-
 
 		try
 		{
@@ -90,7 +91,7 @@ public class App extends Jooby implements JobFactory
 
 	public static void main(final String[] args)
 	{
-		runApp(args, App::new);
+		runApp(args, new NullServer(), App::new);
 	}
 
 	@Override

@@ -7,24 +7,26 @@ import io.jooby.Server;
 import io.jooby.ServerOptions;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 
 public class NullServer extends Server.Base
 {
-	private List<Jooby> m_applications = new ArrayList<>();
+	private List<Jooby> m_applications;
+	private ServerOptions m_options = new ServerOptions();
 
 	@NonNull
 	@Override
 	public Server setOptions(@NonNull ServerOptions options)
 	{
+		m_options = options;
 		return this;
 	}
 
 	@Override
 	protected ServerOptions defaultOptions()
 	{
-		return null;
+		return m_options;
 	}
 
 	@NonNull
@@ -39,7 +41,7 @@ public class NullServer extends Server.Base
 	@Override
 	public Server start(@NonNull Jooby... application)
 	{
-		m_applications.add(application[0]);
+		m_applications = Arrays.asList(application);
 		fireReady(m_applications);
 		return this;
 	}
