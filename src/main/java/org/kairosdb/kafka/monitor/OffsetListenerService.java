@@ -65,7 +65,7 @@ public class OffsetListenerService implements InterruptableJob
 		if (m_listTopicConsumer != null)  //may not have been initialized when this is called the first time
 			m_offsetsTracker.updateTopics(m_listTopicConsumer.listTopics());
 
-		logger.info("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
+		logger.debug("List topics: " + timer.stop().elapsed(TimeUnit.MILLISECONDS));
 	}
 
 

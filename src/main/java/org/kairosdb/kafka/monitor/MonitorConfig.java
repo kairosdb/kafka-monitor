@@ -57,6 +57,11 @@ public class MonitorConfig
 	@Named("topic_monitor.dead_client_restart")
 	private Duration m_deadClientRestart = Duration.ofMinutes(5);
 
+	@Inject(optional = true)
+	@Named("topic_monitor.ownership_reporting_delay")
+	private Duration m_ownershipReportingDelay = Duration.ofSeconds(10);
+
+
 	public MonitorConfig()
 	{
 	}
@@ -114,5 +119,8 @@ public class MonitorConfig
 		return m_trackerRetentionMinutes;
 	}
 
-
+	public Duration getOwnershipReportingDelay()
+	{
+		return m_ownershipReportingDelay;
+	}
 }

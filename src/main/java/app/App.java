@@ -45,7 +45,6 @@ public class App extends Jooby implements JobFactory
 			m_scheduler.setJobFactory(this);
 
 			install(new KTMGuiceModule(new KafkaModule()));
-			//get("/", ctx -> "Welcome to Jooby!");
 
 			onStarted(() ->
 			{

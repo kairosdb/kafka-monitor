@@ -14,7 +14,8 @@ public class DurationConfigModule extends AbstractModule
 	private final List<String> m_durationProps = Arrays.asList(
 			"topic_monitor.tracker_retention",
 			"topic_monitor.stale_partition_age",
-			"topic_monitor.dead_client_restart");
+			"topic_monitor.dead_client_restart",
+			"topic_monitor.ownership_reporting_delay");
 	private final Jooby m_application;
 
 	public DurationConfigModule(Jooby application)

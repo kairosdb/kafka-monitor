@@ -5,13 +5,20 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.kairosdb.metrics4j.MetricSourceManager;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
+/**
+ Reads topic owner information.  Ownership is published based on which monitor reads
+ the topics offsets.  This lets the monitor know if another monitor has taken over
+ reporting metrics for a topic.
+ */
 public class OwnerReader extends TopicReader
 {
+	private static final MonitorStats stats = MetricSourceManager.getSource(MonitorStats.class);
 
 	private final OffsetsTracker m_offsetsTracker;
 	private final Properties m_consumerConfig;
@@ -33,8 +40,14 @@ public class OwnerReader extends TopicReader
 	@Override
 	protected void initializeConsumers()
 	{
+		/*
+		We always read from the latest and do not commit offsets to this topic.
+		We only care about the current data and if another monitor takes a topic
+		from the current one.
+		 */
 		m_consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 		m_consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+		m_consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
 		m_consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, m_monitorConfig.getApplicationId()+"_"+
 				m_monitorConfig.getClientId());
@@ -62,6 +75,8 @@ public class OwnerReader extends TopicReader
 			if (!record.value().equals(m_monitorConfig.getClientId()))
 				m_offsetsTracker.removeTrackedTopic(record.key()); //We do not own the topic anymore
 		}
+
+		stats.ownershipsRead().put(count);
 
 		return count;
 	}

@@ -9,6 +9,7 @@ import io.jooby.ServerOptions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 public class NullServer extends Server.Base
 {
@@ -42,6 +43,8 @@ public class NullServer extends Server.Base
 	public Server start(@NonNull Jooby... application)
 	{
 		m_applications = Arrays.asList(application);
+		addShutdownHook();
+		fireStart(m_applications, Executors.newSingleThreadExecutor());
 		fireReady(m_applications);
 		return this;
 	}

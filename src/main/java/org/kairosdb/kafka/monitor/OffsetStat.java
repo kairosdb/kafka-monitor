@@ -3,7 +3,6 @@ package org.kairosdb.kafka.monitor;
 public class OffsetStat
 {
 	private final int m_partition;
-	//todo review if needs to be atomic
 	private long m_offset;
 	private long m_commitTime;
 

@@ -53,8 +53,6 @@ public class RawOffsetReader extends TopicReader
 		m_consumerConfig = (Properties) defaultConfig.clone();
 
 		m_consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, m_monitorConfig.getClientId()+"_raw_"+m_instanceId);
-		//m_consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-		m_consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
 
 		m_producerConfig = (Properties) m_consumerConfig.clone();
 

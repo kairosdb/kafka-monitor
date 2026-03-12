@@ -6,4 +6,5 @@ public interface MonitorStats
 {
 	LongCollector rawOffsetsRead();
 	LongCollector partitionedOffsetsRead();
+	LongCollector ownershipsRead();
 }
