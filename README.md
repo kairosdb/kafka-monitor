@@ -25,5 +25,18 @@ the following command line
 The project is packaged with stork.  Calling `mvn package` will create a complete
 install directory under target/stork
 
+A container image can be built using the Containerfile in this directory, for
+example:
+
+```sh
+# podman
+podman image build -t kafka-topic-monitor:latest .
+
+# docker
+docker build -t kafka-topic-monitor:latest -f Containerfile .
+```
+
+Pre-built images are available at https://hub.docker.com/r/kairosdb/kafka-monitor
+
 ## Configuration
 All configuration is done in application.conf see the comments in the file for details
