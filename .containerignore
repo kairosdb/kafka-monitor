@@ -1,0 +1,47 @@
+# Container build ignore file
+# Reduces build context size and prevents sensitive files from being included
+
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+target/
+*.jar
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+log/
+
+# Documentation (not needed in container)
+*.md
+!README.md
+how_to_build.txt
+
+# Build tools (used for alternative build, not container)
+tools/
+build.js
+definitions.xml
+deploy.sh
+
+# Test files (tests run in CI, not in container build)
+src/test/
+
+# Container files themselves
+Containerfile
+Dockerfile
+.containerignore
+.dockerignore
