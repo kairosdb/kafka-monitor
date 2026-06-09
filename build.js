@@ -139,6 +139,46 @@ function doDeb(rule)
 }
 
 
+//---------------------------------------------------------------------------
+//Build Docker container
+dockerBuild = new SimpleRule("docker-build").setDescription("Build a Docker image, can specify docker registry with -D DOCKER_REGISTRY=<registry>")
+		.addDepend(mvnRule)
+		.setMakeAction("doDockerBuild");
+
+function doDockerBuild(rule)
+{
+	definition = saw.getDefinition("docker");
+	definition.set("tag", getDockerTag());
+	definition.set("version", version);
+
+	saw.exec(definition.getCommand());
+}
+
+function getDockerTag()
+{
+	var registry = saw.getProperty("DOCKER_REGISTRY", "");
+
+	if ( registry != "" ) {
+		registry += "/";
+	}
+
+	return registry + `${programName}:${version}-${release}`;
+}
+
+//------------------------------------------------------------------------------
+// Push container
+new SimpleRule("docker-push").setDescription("Push a Docker image to registry, can specify docker registry with -D DOCKER_REGISTRY=<registry>")
+		//.addDepend(dockerBuild)
+		.setMakeAction("doDockerPush");
+
+function doDockerPush(rule)
+{
+	var tag = getDockerTag();
+	command = `docker push ${tag}`;
+	saw.exec(command);
+}
+
+
 
 //------------------------------------------------------------------------------
 //Build notification

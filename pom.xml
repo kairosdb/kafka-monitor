@@ -15,7 +15,7 @@
     <!-- Startup class -->
     <application.class>app.App</application.class>
 
-    <jooby.version>3.11.6</jooby.version>
+    <jooby.version>3.11.8</jooby.version>
     <junit.version>5.14.3</junit.version>
 
     <maven.compiler.source>17</maven.compiler.source>

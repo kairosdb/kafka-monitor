@@ -8,3 +8,4 @@ out/*
 dependency.txt
 .idea
 logs/*
+tablesaw.properties

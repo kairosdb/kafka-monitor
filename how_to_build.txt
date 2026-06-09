@@ -6,5 +6,10 @@ To build set your classpath to the tablesaw jar file like so:
 Then to build type
 >java make package-rpm
 
+Build docker image - this will copy the version out of the pom.xml and use it to
+create the docker image version
+>java make docker-build
+
 You can also get help on what targets are available by typing
 >java make help
+

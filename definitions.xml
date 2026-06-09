@@ -37,15 +37,12 @@
 
 	</definition>
 
-	<definition name="genormous" command="java">
-		<!-- <command name="genorm">java</command>
-		<command name="genquery">java</command> -->
-
-		<option name="classpath" pattern="(.+)">-cp $1</option>
-		<option name="genorm">org.agileclick.genorm.Genormous</option>
-		<option name="genquery">org.agileclick.genorm.QueryGen</option>
-
-		<option name="source" pattern="(.+)">-s $1</option>
+	<definition name="docker" command="docker">
+		<option>build</option>
+		<option>--file Containerfile</option>
+		<option name="version" pattern="(.+)">--build-arg VERSION=$1</option>
+		<option name="tag" pattern="(.+)">-t $1</option>
+		<option>.</option>
 	</definition>
 
 	<!-- We are overriding the tablesaw defintion for junit so we can increase
@@ -78,16 +75,5 @@
 		<option>"</option>
 	</definition>
 
-	<definition name="kairos" command="java">
-		<option name="debug">-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005</option>
-		<option name="profile" pattern="(.+)">$1</option>
-		<option>-Dio.netty.epollBugWorkaround=true</option>
-		<option name="classpath" pattern="(.+)">-cp $1</option>
-		<option>org.kairosdb.core.Main</option>
-		<option name="command" pattern="(.+)">-c $1</option>
-		<option name="export_metric" pattern="(.+)">-n $1</option>
-		<option name="import_export_file" pattern="(.+)">-f $1</option>
-		<option name="properties" pattern="(.+)">-p $1</option>
-	</definition>
 
 </definitions>
